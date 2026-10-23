@@ -1,4 +1,5 @@
 import secrets
+import threading
 
 from fastapi import APIRouter, HTTPException, Request
 from pydantic import BaseModel
@@ -6,6 +7,7 @@ from pydantic import BaseModel
 from ...models.gameplay import Submission, SubmissionStatus, utc_now
 from ...repositories.in_memory import InMemorySubmissionRepository
 from ...repositories.interfaces import SubmissionRepository
+from ...services import scoring_service
 from ...services.puzzle_utils import normalize_answer
 from . import admin as admin_module
 from . import rooms as rooms_module
@@ -14,6 +16,19 @@ router = APIRouter()
 
 submission_repository: SubmissionRepository = InMemorySubmissionRepository()
 answer_repository = admin_module.answer_repository
+
+_clue_locks: dict[tuple[str, str], threading.Lock] = {}
+_clue_locks_guard = threading.Lock()
+
+
+def _get_clue_lock(room_id: str, clue_id: str) -> threading.Lock:
+    key = (room_id, clue_id)
+    with _clue_locks_guard:
+        lock = _clue_locks.get(key)
+        if lock is None:
+            lock = threading.Lock()
+            _clue_locks[key] = lock
+        return lock
 
 
 class SubmissionRequest(BaseModel):
@@ -62,4 +77,22 @@ def submit_answer(roomId: str, clueId: str, body: SubmissionRequest, request: Re
         pointsAwarded=0,
     )
     submission_repository.add(submission)
-    return {"status": status.value}
+
+    if status != SubmissionStatus.correct:
+        return {"status": status.value}
+
+    player = rooms_module.player_repository.get(roomId, player_id)
+    player_role = player.role if player else "player"
+    player_color = player.color if player else ""
+
+    lock = _get_clue_lock(roomId, clueId)
+    with lock:
+        points = scoring_service.calculate_points(
+            roomId, clueId, player_id, True, player_role
+        )
+        if points > 0:
+            scoring_service.apply_score(roomId, clueId, player_id, points, player_color)
+        submission_repository.update_status(
+            submission.submissionId, SubmissionStatus.correct, points
+        )
+    return {"status": "correct", "points": points}
