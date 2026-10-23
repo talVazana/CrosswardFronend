@@ -7,6 +7,7 @@ import CrosswordGrid, {
   Puzzle,
 } from "@/components/CrosswordGrid";
 import ParticipantList, { Participant } from "@/components/ParticipantList";
+import Scoreboard from "@/components/Scoreboard";
 import { useRoomLiveUpdates } from "@/hooks/useRoomLiveUpdates";
 
 interface RoomState {
@@ -196,6 +197,10 @@ export default function RoomLobbyPage() {
           <section className="flex flex-col gap-2">
             <h2 className="text-lg font-medium">Participants</h2>
             <ParticipantList players={players} />
+          </section>
+          <section className="flex flex-col gap-2">
+            <h2 className="text-lg font-medium">Scoreboard</h2>
+            <Scoreboard roomId={roomId} />
           </section>
         </>
       ) : null}

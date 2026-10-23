@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { useParams } from "next/navigation";
 import ParticipantList, { Participant } from "@/components/ParticipantList";
+import Scoreboard from "@/components/Scoreboard";
 
 type RoomStatus = "draft" | "lobby" | "active" | "paused" | "finished" | "closed";
 
@@ -196,6 +197,11 @@ export default function AdminRoomDashboardPage() {
           <section className="flex flex-col gap-2">
             <h2 className="text-lg font-medium">Participants</h2>
             <ParticipantList players={players} />
+          </section>
+
+          <section className="flex flex-col gap-2">
+            <h2 className="text-lg font-medium">Scoreboard</h2>
+            <Scoreboard roomId={roomId} />
           </section>
 
           <section className="flex flex-col gap-2">
