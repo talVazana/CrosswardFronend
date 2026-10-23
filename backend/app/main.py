@@ -1,9 +1,13 @@
 from fastapi import FastAPI
 
 from .api.routes.admin import router as admin_router
+from .api.routes.admin_puzzles import router as admin_puzzles_router
 from .api.routes.drafts import router as drafts_router
+from .api.routes.e2e import router as e2e_router
+from .api.routes.events import router as events_router
 from .api.routes.gameplay import router as gameplay_router
 from .api.routes.rooms import router as rooms_router
+from .api.routes.scores import router as scores_router
 from .api.routes.submissions import router as submissions_router
 
 app = FastAPI()
@@ -11,8 +15,12 @@ app = FastAPI()
 app.include_router(rooms_router)
 app.include_router(drafts_router)
 app.include_router(admin_router)
+app.include_router(admin_puzzles_router)
 app.include_router(submissions_router)
+app.include_router(scores_router)
 app.include_router(gameplay_router)
+app.include_router(events_router)
+app.include_router(e2e_router)
 
 
 @app.get("/health")
