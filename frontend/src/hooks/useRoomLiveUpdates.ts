@@ -17,6 +17,8 @@ export interface UseRoomLiveUpdatesResult {
 const BASE_BACKOFF_MS = 1000;
 const MAX_BACKOFF_MS = 30000;
 
+const NAMED_EVENTS = ["CLUE_SOLVED", "ROOM_STATUS_CHANGED"] as const;
+
 export function useRoomLiveUpdates(
   options: UseRoomLiveUpdatesOptions,
 ): UseRoomLiveUpdatesResult {
@@ -70,6 +72,16 @@ export function useRoomLiveUpdates(
       es.onmessage = (event: MessageEvent) => {
         onEventRef.current?.(event);
       };
+
+      // Backend publishes named SSE events (event: CLUE_SOLVED / ROOM_STATUS_CHANGED).
+      // EventSource delivers them to named listeners, not onmessage.
+      if (typeof es.addEventListener === "function") {
+        for (const name of NAMED_EVENTS) {
+          es.addEventListener(name, ((ev: MessageEvent) => {
+            onEventRef.current?.({ ...ev, type: name } as MessageEvent);
+          }) as EventListener);
+        }
+      }
 
       es.onerror = () => {
         es.close();

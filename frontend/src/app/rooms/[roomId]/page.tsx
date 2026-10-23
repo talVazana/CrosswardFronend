@@ -1,9 +1,13 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useParams } from "next/navigation";
-import CrosswordGrid, { Puzzle } from "@/components/CrosswordGrid";
+import CrosswordGrid, {
+  LiveRoomEvent,
+  Puzzle,
+} from "@/components/CrosswordGrid";
 import ParticipantList, { Participant } from "@/components/ParticipantList";
+import { useRoomLiveUpdates } from "@/hooks/useRoomLiveUpdates";
 
 interface RoomState {
   roomId?: string;
@@ -70,6 +74,49 @@ export default function RoomLobbyPage() {
   const [room, setRoom] = useState<RoomState | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [liveEvent, setLiveEvent] = useState<LiveRoomEvent | null>(null);
+  const solvedClueIdsRef = useRef<Set<string>>(new Set());
+
+  const handleLiveEvent = useCallback((event: MessageEvent) => {
+    try {
+      const data = JSON.parse(event.data as string) as Record<string, unknown>;
+      if (event.type === "CLUE_SOLVED") {
+        const clueId = data.clueId;
+        const firstSolverColor = data.firstSolverColor;
+        const points = data.points;
+        if (
+          typeof clueId !== "string" ||
+          typeof firstSolverColor !== "string" ||
+          typeof points !== "number"
+        ) {
+          return;
+        }
+        if (solvedClueIdsRef.current.has(clueId)) return;
+        solvedClueIdsRef.current.add(clueId);
+        setLiveEvent({
+          type: "CLUE_SOLVED",
+          clueId,
+          firstSolverColor,
+          points,
+        });
+      } else if (event.type === "ROOM_STATUS_CHANGED") {
+        const status = data.status;
+        if (typeof status !== "string") return;
+        setRoom((prev) => (prev ? { ...prev, status } : { status }));
+        setLiveEvent({ type: "ROOM_STATUS_CHANGED", status });
+      }
+    } catch {
+      // ignore malformed events
+    }
+  }, []);
+
+  const handleStateFetched = useCallback((state: unknown) => {
+    if (state && typeof state === "object") {
+      setRoom((prev) => ({ ...(prev ?? {}), ...(state as RoomState) }));
+    }
+  }, []);
+
+  useRoomLiveUpdates({ roomId, onEvent: handleLiveEvent, onStateFetched: handleStateFetched });
 
   useEffect(() => {
     let cancelled = false;
@@ -139,7 +186,12 @@ export default function RoomLobbyPage() {
           </header>
           <section className="flex flex-col gap-2">
             <h2 className="text-lg font-medium">Puzzle</h2>
-            <CrosswordGrid roomId={roomId} puzzle={SAMPLE_PUZZLE} />
+            <CrosswordGrid
+              roomId={roomId}
+              puzzle={SAMPLE_PUZZLE}
+              roomStatus={room.status}
+              liveEvent={liveEvent}
+            />
           </section>
           <section className="flex flex-col gap-2">
             <h2 className="text-lg font-medium">Participants</h2>
