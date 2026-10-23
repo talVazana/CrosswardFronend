@@ -1,14 +1,29 @@
 import secrets
+from typing import Optional
 
 from ..models.gameplay import PublicClueState, ScoreEvent, utc_now
 from ..repositories.in_memory import InMemoryScoreRepository
-from ..repositories.interfaces import ScoreRepository
+from ..repositories.interfaces import PlayerClueStateRepository, ScoreRepository
 
 
 class ScoringService:
-    def __init__(self, score_repository: ScoreRepository):
+    def __init__(
+        self,
+        score_repository: ScoreRepository,
+        player_clue_state_repository: Optional[PlayerClueStateRepository] = None,
+    ):
         self._score_repository = score_repository
+        self._player_clue_state_repository = player_clue_state_repository
         self._public_clue_states: dict[tuple[str, str], PublicClueState] = {}
+
+    def _is_revealed(self, room_id: str, clue_id: str, player_id: str) -> bool:
+        repo = self._player_clue_state_repository
+        if repo is None:
+            from ..api.routes import drafts as drafts_module
+
+            repo = drafts_module.player_clue_state_repository
+        state = repo.get(room_id, player_id, clue_id)
+        return state is not None and state.revealed
 
     def calculate_points(
         self,
@@ -21,6 +36,8 @@ class ScoringService:
         if not is_correct:
             return 0
         if player_role == "admin":
+            return 0
+        if self._is_revealed(room_id, clue_id, player_id):
             return 0
         events = self._score_repository.list_by_room(room_id)
         for event in events:

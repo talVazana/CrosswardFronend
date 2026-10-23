@@ -7,6 +7,8 @@ def reconcile_pending_submissions(room_id: str, clue_id: str, official_answer: s
     from ..api.routes.rooms import player_repository
     from ..api.routes.submissions import _get_clue_lock, submission_repository
 
+    from ..api.routes import drafts as drafts_module
+
     pending = [
         s
         for s in submission_repository.list_pending_by_room(room_id)
@@ -22,8 +24,16 @@ def reconcile_pending_submissions(room_id: str, clue_id: str, official_answer: s
             player_color = player.color if player else ""
 
             if normalize_answer(submission.answer) == official_answer:
-                points = scoring_service.calculate_points(
-                    room_id, clue_id, submission.playerId, True, player_role
+                state = drafts_module.player_clue_state_repository.get(
+                    room_id, submission.playerId, clue_id
+                )
+                revealed = state is not None and state.revealed
+                points = (
+                    0
+                    if revealed
+                    else scoring_service.calculate_points(
+                        room_id, clue_id, submission.playerId, True, player_role
+                    )
                 )
                 if points > 0:
                     scoring_service.apply_score(
