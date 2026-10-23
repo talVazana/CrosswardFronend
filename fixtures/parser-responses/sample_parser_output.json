@@ -1,0 +1,16 @@
+{
+  "rows": 5,
+  "cols": 5,
+  "matrix": [
+    [2, 1, 1, 1, 2],
+    [1, 0, 2, 1, 1],
+    [1, 1, 1, 1, 1],
+    [1, 1, 1, 1, 1],
+    [1, 1, 1, 1, 1]
+  ],
+  "clues": [
+    {"clue_number": 1, "row": 0, "col": 0, "horizontal": true, "vertical": true},
+    {"clue_number": 2, "row": 0, "col": 4, "horizontal": false, "vertical": true},
+    {"clue_number": 3, "row": 1, "col": 2, "horizontal": true, "vertical": false}
+  ]
+}
