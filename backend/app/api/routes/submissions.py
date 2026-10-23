@@ -5,6 +5,7 @@ from fastapi import APIRouter, HTTPException, Request
 from pydantic import BaseModel
 
 from ...models.gameplay import Submission, SubmissionStatus, utc_now
+from ...models.room import RoomStatus
 from ...repositories.in_memory import InMemorySubmissionRepository
 from ...repositories.interfaces import SubmissionRepository
 from ...services import scoring_service
@@ -55,6 +56,8 @@ def submit_answer(roomId: str, clueId: str, body: SubmissionRequest, request: Re
     room = rooms_module.room_repository.get(roomId)
     if room is None:
         raise HTTPException(status_code=404, detail="Room not found")
+    if room.status is not RoomStatus.active:
+        raise HTTPException(status_code=400, detail="Submissions are currently disabled")
 
     answers = answer_repository.get(room.puzzleSnapshot.puzzleId)
     official_answer = answers.answers.get(clueId) if answers else None
