@@ -57,8 +57,10 @@ export default function CrosswordGrid({ roomId, puzzle }: CrosswordGridProps) {
   const { selectedCell, currentDirection, handleCellClick } = useCrosswordSelection();
 
   const [drafts, setDrafts] = useState<Record<string, string>>({});
+  const [revealed, setRevealed] = useState<Record<string, boolean>>({});
   const [feedback, setFeedback] = useState<FeedbackState>(null);
   const [submitting, setSubmitting] = useState(false);
+  const [revealing, setRevealing] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const shakeTimeout = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -76,6 +78,7 @@ export default function CrosswordGrid({ roomId, puzzle }: CrosswordGridProps) {
       : null;
 
   const activeClueId = activeClue?.clueId ?? null;
+  const isRevealed = activeClueId ? revealed[activeClueId] ?? false : false;
   const draft = activeClueId ? drafts[activeClueId] ?? "" : "";
   const activeCells = activeClue ? cellsForClue(grid, activeClue) : [];
   const activeCellKeys = new Set(activeCells.map((c) => `${c.row}-${c.col}`));
@@ -96,7 +99,7 @@ export default function CrosswordGrid({ roomId, puzzle }: CrosswordGridProps) {
   }, []);
 
   const submit = useCallback(async () => {
-    if (!activeClueId || submitting) return;
+    if (!activeClueId || submitting || isRevealed) return;
     if (draft.trim().length === 0) return;
 
     setSubmitting(true);
@@ -135,9 +138,50 @@ export default function CrosswordGrid({ roomId, puzzle }: CrosswordGridProps) {
     } finally {
       setSubmitting(false);
     }
-  }, [activeClueId, draft, roomId, submitting]);
+  }, [activeClueId, draft, roomId, submitting, isRevealed]);
+
+  const reveal = useCallback(async () => {
+    if (!activeClueId || revealing || isRevealed) return;
+    const confirmed = window.confirm(
+      "Are you sure? You will not earn points for this clue.",
+    );
+    if (!confirmed) return;
+
+    setRevealing(true);
+    setError(null);
+    try {
+      const base = process.env.NEXT_PUBLIC_BACKEND_URL ?? "http://localhost:8000";
+      const res = await fetch(
+        `${base}/rooms/${roomId}/clues/${activeClueId}/reveal`,
+        {
+          method: "POST",
+          credentials: "include",
+        },
+      );
+      if (res.status === 400) {
+        setError("Answer not available yet");
+        return;
+      }
+      if (!res.ok) {
+        setError(`Reveal failed (status ${res.status})`);
+        return;
+      }
+      const body = (await res.json()) as { answer?: string };
+      if (typeof body.answer !== "string") {
+        setError("Unexpected response from server");
+        return;
+      }
+      setDrafts((prev) => ({ ...prev, [activeClueId]: body.answer as string }));
+      setRevealed((prev) => ({ ...prev, [activeClueId]: true }));
+    } catch {
+      setError("Network error. Please try again.");
+    } finally {
+      setRevealing(false);
+    }
+  }, [activeClueId, revealing, isRevealed, roomId]);
 
   const handleKeyDown = (e: KeyboardEvent<HTMLDivElement>) => {
+    if (isRevealed) return;
     if (e.key === "Enter") {
       e.preventDefault();
       void submit();
@@ -157,6 +201,11 @@ export default function CrosswordGrid({ roomId, puzzle }: CrosswordGridProps) {
     if (feedback === "correct" && isActive) classes += " bg-green-400";
     if (feedback === "incorrect" && isActive) classes += " bg-red-400 animate-[shake_0.5s_ease-in-out]";
     if (feedback === "pending" && isActive) classes += " bg-yellow-200";
+    const clueIdForCell = clueForCell(cell.row, cell.col, "across")?.clueId ??
+      clueForCell(cell.row, cell.col, "down")?.clueId;
+    if (clueIdForCell && revealed[clueIdForCell] && isActive) {
+      classes += " text-amber-700";
+    }
     return classes;
   };
 
@@ -205,22 +254,36 @@ export default function CrosswordGrid({ roomId, puzzle }: CrosswordGridProps) {
               aria-label="Answer draft"
               value={draft}
               onChange={(e) => {
-                if (!activeClueId) return;
+                if (!activeClueId || isRevealed) return;
                 setDrafts((prev) => ({ ...prev, [activeClueId]: e.target.value }));
                 setFeedback(null);
               }}
-              className="rounded border border-gray-300 px-3 py-2"
+              disabled={isRevealed}
+              className="rounded border border-gray-300 px-3 py-2 disabled:bg-gray-100"
               placeholder={`Your answer (${activeClue.answerLength} letters)`}
             />
             <div className="flex items-center gap-3">
               <button
                 type="button"
                 onClick={() => void submit()}
-                disabled={draft.trim().length === 0 || submitting}
+                disabled={isRevealed || draft.trim().length === 0 || submitting}
                 className="rounded bg-blue-600 px-4 py-2 text-white disabled:opacity-50"
               >
                 {submitting ? "Submitting..." : "Submit"}
               </button>
+              <button
+                type="button"
+                onClick={() => void reveal()}
+                disabled={isRevealed || revealing}
+                className="rounded bg-amber-600 px-4 py-2 text-white disabled:opacity-50"
+              >
+                {revealing ? "Revealing..." : "Reveal Answer"}
+              </button>
+              {isRevealed ? (
+                <span role="status" className="text-sm font-medium text-amber-700">
+                  🔒 Revealed — no points for this clue
+                </span>
+              ) : null}
               {feedback === "correct" ? (
                 <span role="status" className="text-sm font-medium text-green-700">
                   Correct!
