@@ -23,9 +23,26 @@ export interface Puzzle {
 
 type FeedbackState = "correct" | "incorrect" | "pending" | null;
 
+export interface ClueSolvedEvent {
+  type: "CLUE_SOLVED";
+  clueId: string;
+  firstSolverColor: string;
+  points: number;
+}
+
+export interface RoomStatusChangedEvent {
+  type: "ROOM_STATUS_CHANGED";
+  status: string;
+}
+
+export type LiveRoomEvent = ClueSolvedEvent | RoomStatusChangedEvent;
+
 interface CrosswordGridProps {
   roomId: string;
   puzzle: Puzzle;
+  roomStatus?: string;
+  liveEvent?: LiveRoomEvent | null;
+  initialSolvedClues?: Record<string, string>;
 }
 
 function cellsForClue(grid: Cell[][], clue: Clue): Cell[] {
@@ -39,12 +56,14 @@ function cellsForClue(grid: Cell[][], clue: Clue): Cell[] {
       if (!startsHere) continue;
       let r = cell.row;
       let c = cell.col;
+      const step = clue.direction === "across" ? -1 : 0;
+      const stepRow = clue.direction === "down" ? 1 : 0;
       for (let i = 0; i < clue.answerLength; i++) {
         const next = grid[r]?.[c];
         if (!next || next.type === "black") break;
         cells.push(next);
-        if (clue.direction === "across") c += 1;
-        else r += 1;
+        r += stepRow;
+        c += step;
       }
       return cells;
     }
@@ -52,17 +71,46 @@ function cellsForClue(grid: Cell[][], clue: Clue): Cell[] {
   return cells;
 }
 
-export default function CrosswordGrid({ roomId, puzzle }: CrosswordGridProps) {
+export default function CrosswordGrid({
+  roomId,
+  puzzle,
+  roomStatus,
+  liveEvent,
+  initialSolvedClues = {},
+}: CrosswordGridProps) {
   const grid = build2DGrid(puzzle.cells, puzzle.width, puzzle.height);
   const { selectedCell, currentDirection, handleCellClick } = useCrosswordSelection();
 
   const [drafts, setDrafts] = useState<Record<string, string>>({});
   const [revealed, setRevealed] = useState<Record<string, boolean>>({});
+  const [solvedClues, setSolvedClues] = useState<Record<string, string>>(initialSolvedClues);
   const [feedback, setFeedback] = useState<FeedbackState>(null);
   const [submitting, setSubmitting] = useState(false);
   const [revealing, setRevealing] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [cursorIndex, setCursorIndex] = useState(-1);
   const shakeTimeout = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const lastProcessedEventRef = useRef<LiveRoomEvent | null>(null);
+
+  const isPaused = roomStatus === "paused";
+
+  useEffect(() => {
+    if (!liveEvent) return;
+    if (lastProcessedEventRef.current === liveEvent) return;
+    lastProcessedEventRef.current = liveEvent;
+
+    try {
+      if (liveEvent.type === "CLUE_SOLVED") {
+        const { clueId, firstSolverColor } = liveEvent;
+        setSolvedClues((prev) => {
+          if (prev[clueId] !== undefined) return prev;
+          return { ...prev, [clueId]: firstSolverColor };
+        });
+      }
+    } catch {
+      // ignore malformed events; drafts are never touched by live events
+    }
+  }, [liveEvent]);
 
   const clueForCell = (row: number, col: number, direction: "across" | "down") =>
     puzzle.clues.find((clue) => {
@@ -82,6 +130,19 @@ export default function CrosswordGrid({ roomId, puzzle }: CrosswordGridProps) {
   const draft = activeClueId ? drafts[activeClueId] ?? "" : "";
   const activeCells = activeClue ? cellsForClue(grid, activeClue) : [];
   const activeCellKeys = new Set(activeCells.map((c) => `${c.row}-${c.col}`));
+  const cursorCell = (() => {
+    if (activeCells.length === 0) return null;
+    if (cursorIndex >= 0) {
+      return activeCells[Math.min(cursorIndex, activeCells.length - 1)];
+    }
+    if (selectedCell) {
+      const idx = activeCells.findIndex(
+        (c) => c.row === selectedCell.row && c.col === selectedCell.col,
+      );
+      if (idx >= 0) return activeCells[idx];
+    }
+    return activeCells[0];
+  })();
   const draftByCell = new Map<string, string>();
   activeCells.forEach((cell, i) => {
     draftByCell.set(`${cell.row}-${cell.col}`, draft[i] ?? "");
@@ -90,7 +151,79 @@ export default function CrosswordGrid({ roomId, puzzle }: CrosswordGridProps) {
   useEffect(() => {
     setFeedback(null);
     setError(null);
+    setCursorIndex(-1);
   }, [activeClueId]);
+
+  const moveSelectedCell = (row: number, col: number) => {
+    const cell = grid[row]?.[col];
+    if (!cell || cell.type === "black") return;
+    handleCellClick(row, col, cell);
+  };
+
+  const handleKeyDown = (e: KeyboardEvent<HTMLDivElement>) => {
+    if (isRevealed || isPaused) return;
+    if (!selectedCell) return;
+
+    if (e.key === "Enter") {
+      if (!activeClueId) return;
+      e.preventDefault();
+      void submit();
+      return;
+    }
+    if (
+      e.key === "ArrowLeft" ||
+      e.key === "ArrowRight" ||
+      e.key === "ArrowUp" ||
+      e.key === "ArrowDown"
+    ) {
+      e.preventDefault();
+      const delta =
+        e.key === "ArrowLeft" ? { row: 0, col: -1 }
+        : e.key === "ArrowRight" ? { row: 0, col: 1 }
+        : e.key === "ArrowUp" ? { row: -1, col: 0 }
+        : { row: 1, col: 0 };
+      setCursorIndex(-1);
+      moveSelectedCell(selectedCell.row + delta.row, selectedCell.col + delta.col);
+      return;
+    }
+    if (!activeClue || !activeClueId) return;
+
+    if (/^[a-zA-Z]$/.test(e.key)) {
+      e.preventDefault();
+      const cells = cellsForClue(grid, activeClue);
+      const writeIdx = cursorIndex + 1;
+      if (writeIdx >= cells.length) return;
+      const letter = e.key.toUpperCase();
+      setDrafts((prev) => {
+        const current = prev[activeClueId] ?? "";
+        const chars = current.split("");
+        while (chars.length < cells.length) chars.push("");
+        chars[writeIdx] = letter;
+        return { ...prev, [activeClueId]: chars.join("") };
+      });
+      setFeedback(null);
+      setCursorIndex(writeIdx);
+      moveSelectedCell(cells[writeIdx].row, cells[writeIdx].col);
+      return;
+    }
+    if (e.key === "Backspace") {
+      if (cursorIndex < 0) return;
+      e.preventDefault();
+      const cells = cellsForClue(grid, activeClue);
+      setDrafts((prev) => {
+        const current = prev[activeClueId] ?? "";
+        const chars = current.split("");
+        while (chars.length < cells.length) chars.push("");
+        chars[cursorIndex] = "";
+        return { ...prev, [activeClueId]: chars.join("") };
+      });
+      setFeedback(null);
+      const prevIdx = cursorIndex - 1;
+      setCursorIndex(prevIdx);
+      const target = cells[Math.max(prevIdx, 0)];
+      moveSelectedCell(target.row, target.col);
+    }
+  };
 
   useEffect(() => {
     return () => {
@@ -99,7 +232,7 @@ export default function CrosswordGrid({ roomId, puzzle }: CrosswordGridProps) {
   }, []);
 
   const submit = useCallback(async () => {
-    if (!activeClueId || submitting || isRevealed) return;
+    if (!activeClueId || submitting || isRevealed || isPaused) return;
     if (draft.trim().length === 0) return;
 
     setSubmitting(true);
@@ -138,10 +271,10 @@ export default function CrosswordGrid({ roomId, puzzle }: CrosswordGridProps) {
     } finally {
       setSubmitting(false);
     }
-  }, [activeClueId, draft, roomId, submitting, isRevealed]);
+  }, [activeClueId, draft, roomId, submitting, isRevealed, isPaused]);
 
   const reveal = useCallback(async () => {
-    if (!activeClueId || revealing || isRevealed) return;
+    if (!activeClueId || revealing || isRevealed || isPaused) return;
     const confirmed = window.confirm(
       "Are you sure? You will not earn points for this clue.",
     );
@@ -178,15 +311,7 @@ export default function CrosswordGrid({ roomId, puzzle }: CrosswordGridProps) {
     } finally {
       setRevealing(false);
     }
-  }, [activeClueId, revealing, isRevealed, roomId]);
-
-  const handleKeyDown = (e: KeyboardEvent<HTMLDivElement>) => {
-    if (isRevealed) return;
-    if (e.key === "Enter") {
-      e.preventDefault();
-      void submit();
-    }
-  };
+  }, [activeClueId, revealing, isRevealed, roomId, isPaused]);
 
   const cellClass = (cell: Cell): string => {
     const base =
@@ -194,9 +319,12 @@ export default function CrosswordGrid({ roomId, puzzle }: CrosswordGridProps) {
     if (cell.type === "black") return `${base} bg-gray-900`;
     const isSelected =
       selectedCell != null && selectedCell.row === cell.row && selectedCell.col === cell.col;
+    const isCursor =
+      cursorCell != null && cursorCell.row === cell.row && cursorCell.col === cell.col;
     const isActive = activeCellKeys.has(`${cell.row}-${cell.col}`);
     let classes = `${base} bg-white text-gray-900`;
-    if (isSelected) classes += " bg-blue-200";
+    if (isCursor) classes += " bg-blue-200";
+    else if (isSelected && cursorCell == null) classes += " bg-blue-200";
     else if (isActive) classes += " bg-blue-50";
     if (feedback === "correct" && isActive) classes += " bg-green-400";
     if (feedback === "incorrect" && isActive) classes += " bg-red-400 animate-[shake_0.5s_ease-in-out]";
@@ -211,23 +339,37 @@ export default function CrosswordGrid({ roomId, puzzle }: CrosswordGridProps) {
 
   return (
     <div
-      className="flex flex-col gap-4"
+      className="flex flex-col gap-4 rounded-lg outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2"
       tabIndex={0}
       onKeyDown={handleKeyDown}
       role="application"
       aria-label="Crossword grid"
     >
       <div
-        className="grid w-fit gap-0"
+        className="grid w-full max-w-full gap-0"
         style={{ gridTemplateColumns: `repeat(${puzzle.width}, minmax(0, 1fr))` }}
       >
         {grid.map((row) =>
-          row.map((cell) => (
+          row.map((cell) => {
+            const letter = draftByCell.get(`${cell.row}-${cell.col}`) ?? "";
+            const cellLabel =
+              cell.type === "black"
+                ? `Cell row ${cell.row + 1}, column ${cell.col + 1}, black square`
+                : `Cell row ${cell.row + 1}, column ${cell.col + 1}, letter ${letter || "empty"}`;
+            return (
             <button
               key={`${cell.row}-${cell.col}`}
               type="button"
               data-testid={`cell-${cell.row}-${cell.col}`}
+              aria-label={cellLabel}
               className={cellClass(cell)}
+              style={(() => {
+                const clueIdForCell =
+                  clueForCell(cell.row, cell.col, "across")?.clueId ??
+                  clueForCell(cell.row, cell.col, "down")?.clueId;
+                const color = clueIdForCell ? solvedClues[clueIdForCell] : undefined;
+                return color ? { boxShadow: `inset 0 0 0 3px ${color}` } : undefined;
+              })()}
               onClick={() => handleCellClick(cell.row, cell.col, cell)}
               disabled={cell.type === "black"}
             >
@@ -238,7 +380,8 @@ export default function CrosswordGrid({ roomId, puzzle }: CrosswordGridProps) {
               ) : null}
               {draftByCell.get(`${cell.row}-${cell.col}`) ?? ""}
             </button>
-          )),
+            );
+          }),
         )}
       </div>
 
@@ -254,11 +397,11 @@ export default function CrosswordGrid({ roomId, puzzle }: CrosswordGridProps) {
               aria-label="Answer draft"
               value={draft}
               onChange={(e) => {
-                if (!activeClueId || isRevealed) return;
+                if (!activeClueId || isRevealed || isPaused) return;
                 setDrafts((prev) => ({ ...prev, [activeClueId]: e.target.value }));
                 setFeedback(null);
               }}
-              disabled={isRevealed}
+              disabled={isRevealed || isPaused}
               className="rounded border border-gray-300 px-3 py-2 disabled:bg-gray-100"
               placeholder={`Your answer (${activeClue.answerLength} letters)`}
             />
@@ -266,7 +409,7 @@ export default function CrosswordGrid({ roomId, puzzle }: CrosswordGridProps) {
               <button
                 type="button"
                 onClick={() => void submit()}
-                disabled={isRevealed || draft.trim().length === 0 || submitting}
+                disabled={isRevealed || isPaused || draft.trim().length === 0 || submitting}
                 className="rounded bg-blue-600 px-4 py-2 text-white disabled:opacity-50"
               >
                 {submitting ? "Submitting..." : "Submit"}
@@ -274,7 +417,7 @@ export default function CrosswordGrid({ roomId, puzzle }: CrosswordGridProps) {
               <button
                 type="button"
                 onClick={() => void reveal()}
-                disabled={isRevealed || revealing}
+                disabled={isRevealed || isPaused || revealing}
                 className="rounded bg-amber-600 px-4 py-2 text-white disabled:opacity-50"
               >
                 {revealing ? "Revealing..." : "Reveal Answer"}

@@ -6,8 +6,12 @@ import CrosswordGrid, {
   LiveRoomEvent,
   Puzzle,
 } from "@/components/CrosswordGrid";
+import ClueList from "@/components/ClueList";
 import ParticipantList, { Participant } from "@/components/ParticipantList";
 import Scoreboard from "@/components/Scoreboard";
+import LoadingSpinner from "@/components/ui/LoadingSpinner";
+import ErrorMessage from "@/components/ui/ErrorMessage";
+import EmptyState from "@/components/ui/EmptyState";
 import { useRoomLiveUpdates } from "@/hooks/useRoomLiveUpdates";
 
 interface RoomState {
@@ -17,47 +21,9 @@ interface RoomState {
   status?: string;
   players?: Participant[];
   participants?: Participant[];
+  puzzle?: Puzzle;
+  solvedClues?: { clueId: string; firstSolverColor: string }[];
 }
-
-const SAMPLE_PUZZLE: Puzzle = {
-  puzzleId: "sample-puzzle-001",
-  title: "Sample Puzzle",
-  width: 5,
-  height: 5,
-  cells: [
-    { row: 0, col: 0, type: "white", number: 1, startsAcross: true, startsDown: true },
-    { row: 0, col: 1, type: "white", number: null, startsAcross: false, startsDown: false },
-    { row: 0, col: 2, type: "white", number: null, startsAcross: false, startsDown: false },
-    { row: 0, col: 3, type: "white", number: null, startsAcross: false, startsDown: false },
-    { row: 0, col: 4, type: "white", number: 2, startsAcross: false, startsDown: true },
-    { row: 1, col: 0, type: "white", number: null, startsAcross: false, startsDown: false },
-    { row: 1, col: 1, type: "black", number: null, startsAcross: false, startsDown: false },
-    { row: 1, col: 2, type: "white", number: 3, startsAcross: true, startsDown: false },
-    { row: 1, col: 3, type: "white", number: null, startsAcross: false, startsDown: false },
-    { row: 1, col: 4, type: "white", number: null, startsAcross: false, startsDown: false },
-    { row: 2, col: 0, type: "white", number: null, startsAcross: false, startsDown: false },
-    { row: 2, col: 1, type: "white", number: null, startsAcross: false, startsDown: false },
-    { row: 2, col: 2, type: "white", number: null, startsAcross: false, startsDown: false },
-    { row: 2, col: 3, type: "white", number: null, startsAcross: false, startsDown: false },
-    { row: 2, col: 4, type: "white", number: null, startsAcross: false, startsDown: false },
-    { row: 3, col: 0, type: "white", number: null, startsAcross: false, startsDown: false },
-    { row: 3, col: 1, type: "white", number: null, startsAcross: false, startsDown: false },
-    { row: 3, col: 2, type: "white", number: null, startsAcross: false, startsDown: false },
-    { row: 3, col: 3, type: "white", number: null, startsAcross: false, startsDown: false },
-    { row: 3, col: 4, type: "white", number: null, startsAcross: false, startsDown: false },
-    { row: 4, col: 0, type: "white", number: null, startsAcross: false, startsDown: false },
-    { row: 4, col: 1, type: "white", number: null, startsAcross: false, startsDown: false },
-    { row: 4, col: 2, type: "white", number: null, startsAcross: false, startsDown: false },
-    { row: 4, col: 3, type: "white", number: null, startsAcross: false, startsDown: false },
-    { row: 4, col: 4, type: "white", number: null, startsAcross: false, startsDown: false },
-  ],
-  clues: [
-    { clueId: "A1", number: 1, direction: "across", text: "Feline pet", answerLength: 3 },
-    { clueId: "D1", number: 1, direction: "down", text: "Capital of France", answerLength: 5 },
-    { clueId: "D2", number: 2, direction: "down", text: "Opposite of off", answerLength: 2 },
-    { clueId: "A3", number: 3, direction: "across", text: "Color of the sky", answerLength: 4 },
-  ],
-};
 
 const STATUS_LABELS: Record<string, string> = {
   draft: "Draft",
@@ -160,20 +126,25 @@ export default function RoomLobbyPage() {
   }, [roomId]);
 
   const players = room?.players ?? room?.participants ?? [];
+  const puzzle = room?.puzzle;
+  const solvedCluesMap = (room?.solvedClues ?? []).reduce<Record<string, string>>(
+    (acc, entry) => {
+      acc[entry.clueId] = entry.firstSolverColor;
+      return acc;
+    },
+    {},
+  );
   const statusLabel = room?.status
     ? (STATUS_LABELS[room.status] ?? room.status)
     : null;
+  const solvedClueIdSet = new Set(Object.keys(solvedCluesMap));
 
   return (
-    <main className="mx-auto flex min-h-screen w-full max-w-xl flex-col gap-6 p-6">
+    <main className="mx-auto flex min-h-screen w-full max-w-xl flex-col gap-6 p-6 overflow-x-hidden">
       {loading ? (
-        <p role="status" className="text-gray-600">
-          Loading...
-        </p>
+        <LoadingSpinner />
       ) : error ? (
-        <p role="alert" className="text-red-600">
-          {error}
-        </p>
+        <ErrorMessage message={error} />
       ) : room ? (
         <>
           <header className="flex flex-col gap-1">
@@ -187,16 +158,37 @@ export default function RoomLobbyPage() {
           </header>
           <section className="flex flex-col gap-2">
             <h2 className="text-lg font-medium">Puzzle</h2>
-            <CrosswordGrid
-              roomId={roomId}
-              puzzle={SAMPLE_PUZZLE}
-              roomStatus={room.status}
-              liveEvent={liveEvent}
-            />
+            {puzzle ? (
+              <CrosswordGrid
+                roomId={roomId}
+                puzzle={puzzle}
+                roomStatus={room.status}
+                liveEvent={liveEvent}
+                initialSolvedClues={solvedCluesMap}
+              />
+            ) : (
+              <EmptyState
+                title="No puzzle loaded"
+                message="The host has not attached a puzzle to this room yet."
+              />
+            )}
           </section>
+          {puzzle ? (
+            <section className="flex flex-col gap-2">
+              <h2 className="text-lg font-medium">Clues</h2>
+              <ClueList clues={puzzle.clues} solvedClueIds={solvedClueIdSet} />
+            </section>
+          ) : null}
           <section className="flex flex-col gap-2">
             <h2 className="text-lg font-medium">Participants</h2>
-            <ParticipantList players={players} />
+            {players.length === 0 ? (
+              <EmptyState
+                title="No participants yet"
+                message="Players will appear here once they join the room."
+              />
+            ) : (
+              <ParticipantList players={players} />
+            )}
           </section>
           <section className="flex flex-col gap-2">
             <h2 className="text-lg font-medium">Scoreboard</h2>
