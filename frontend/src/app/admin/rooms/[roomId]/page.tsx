@@ -1,9 +1,12 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useParams } from "next/navigation";
 import ParticipantList, { Participant } from "@/components/ParticipantList";
 import Scoreboard from "@/components/Scoreboard";
+import LoadingSpinner from "@/components/ui/LoadingSpinner";
+import ErrorMessage from "@/components/ui/ErrorMessage";
+import EmptyState from "@/components/ui/EmptyState";
 
 type RoomStatus = "draft" | "lobby" | "active" | "paused" | "finished" | "closed";
 
@@ -75,8 +78,10 @@ export default function AdminRoomDashboardPage() {
   const [error, setError] = useState<string | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
   const [busy, setBusy] = useState<LifecycleAction | null>(null);
+  const lastActionRef = useRef<LifecycleAction | null>(null);
 
   const load = useCallback(async () => {
+    setLoading(true);
     setError(null);
     try {
       const base = process.env.NEXT_PUBLIC_BACKEND_URL ?? "http://localhost:8000";
@@ -118,6 +123,7 @@ export default function AdminRoomDashboardPage() {
         );
         if (!confirmed) return;
       }
+      lastActionRef.current = action;
       setBusy(action);
       setActionError(null);
       try {
@@ -150,13 +156,9 @@ export default function AdminRoomDashboardPage() {
   return (
     <main className="mx-auto flex min-h-screen w-full max-w-xl flex-col gap-6 p-6">
       {loading ? (
-        <p role="status" className="text-gray-600">
-          Loading...
-        </p>
+        <LoadingSpinner />
       ) : error ? (
-        <p role="alert" className="text-red-600">
-          {error}
-        </p>
+        <ErrorMessage message={error} onRetry={load} />
       ) : room ? (
         <>
           <header className="flex flex-col gap-1">
@@ -188,15 +190,25 @@ export default function AdminRoomDashboardPage() {
               })}
             </div>
             {actionError ? (
-              <p role="alert" className="text-sm text-red-600">
-                {actionError}
-              </p>
+              <ErrorMessage
+                title="Action failed"
+                message={actionError}
+                onRetry={() => triggerAction(lastActionRef.current ?? "start")}
+                className="text-sm"
+              />
             ) : null}
           </section>
 
           <section className="flex flex-col gap-2">
             <h2 className="text-lg font-medium">Participants</h2>
-            <ParticipantList players={players} />
+            {players.length === 0 ? (
+              <EmptyState
+                title="No participants yet"
+                message="Players will appear here once they join the room."
+              />
+            ) : (
+              <ParticipantList players={players} />
+            )}
           </section>
 
           <section className="flex flex-col gap-2">
@@ -207,7 +219,10 @@ export default function AdminRoomDashboardPage() {
           <section className="flex flex-col gap-2">
             <h2 className="text-lg font-medium">Pending Submissions</h2>
             {pendingSubmissions.length === 0 ? (
-              <p className="text-sm text-gray-500">No pending submissions.</p>
+              <EmptyState
+                title="No pending submissions"
+                message="Submitted answers waiting for review will appear here."
+              />
             ) : (
               <ul className="flex flex-col gap-1" aria-label="Pending submissions">
                 {pendingSubmissions.map((submission, index) => (
@@ -223,7 +238,10 @@ export default function AdminRoomDashboardPage() {
           <section className="flex flex-col gap-2">
             <h2 className="text-lg font-medium">Scores</h2>
             {scores.length === 0 ? (
-              <p className="text-sm text-gray-500">No scores yet.</p>
+              <EmptyState
+                title="No scores yet"
+                message="Scores will appear here once players solve clues."
+              />
             ) : (
               <ul className="flex flex-col gap-1" aria-label="Scores">
                 {scores.map((entry, index) => (
