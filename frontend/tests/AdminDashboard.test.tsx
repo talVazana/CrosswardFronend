@@ -7,6 +7,7 @@ const { mockUseParams } = vi.hoisted(() => ({
 
 vi.mock("next/navigation", () => ({
   useParams: mockUseParams,
+  useRouter: () => ({ push: vi.fn(), replace: vi.fn() }),
 }));
 
 import AdminRoomDashboardPage from "../src/app/admin/rooms/[roomId]/page";
@@ -158,5 +159,94 @@ describe("TASK-034 admin dashboard UI", () => {
     fireEvent.click(button("Start"));
     await waitFor(() => expect(button("Pause").disabled).toBe(false));
     expect(button("Start").disabled).toBe(true);
+  });
+
+  it("renders the crossword and approves an answer drafted in the admin grid", async () => {
+    const puzzle = {
+      puzzleId: "puzzle-1",
+      title: "Admin puzzle",
+      width: 3,
+      height: 1,
+      cells: [
+        { row: 0, col: 0, type: "white", number: null, startsAcross: false, startsDown: false },
+        { row: 0, col: 1, type: "white", number: null, startsAcross: false, startsDown: false },
+        { row: 0, col: 2, type: "white", number: 1, startsAcross: true, startsDown: false },
+      ],
+      clues: [
+        { clueId: "A1", number: 1, direction: "across", text: "Feline pet", answerLength: 3 },
+      ],
+    };
+    const mockFetch = vi.fn(async (_input: RequestInfo | URL, init?: RequestInit) => {
+      if (init?.method === "PUT") return response(200, { status: "ok" });
+      return response(200, {
+        ...room("active"),
+        puzzleId: "puzzle-1",
+        puzzle,
+        officialAnswers: {},
+        solvedClues: [],
+      });
+    });
+    vi.stubGlobal("fetch", mockFetch);
+    vi.stubGlobal("confirm", vi.fn(() => true));
+
+    render(<AdminRoomDashboardPage />);
+    const grid = await screen.findByRole("application", { name: "Admin crossword grid" });
+    fireEvent.click(screen.getByTestId("admin-cell-0-2"));
+    for (const letter of "CAT") {
+      fireEvent.keyDown(grid, { key: letter });
+    }
+    const approve = screen.getByRole("button", { name: "Approve answer" });
+    await waitFor(() => expect((approve as HTMLButtonElement).disabled).toBe(false));
+    fireEvent.click(approve);
+
+    await waitFor(() => {
+      const puts = mockFetch.mock.calls.filter(
+        ([, init]) => (init as RequestInit | undefined)?.method === "PUT",
+      );
+      expect(puts.length).toBe(1);
+      const [url, init] = puts[0];
+      expect(String(url).endsWith("/admin/puzzles/puzzle-1/clues/A1/answer")).toBe(true);
+      expect(JSON.parse((init as RequestInit).body as string)).toEqual({ answer: "CAT" });
+    });
+  });
+
+  it("approving a pending submission saves the answer for the room puzzle and reloads", async () => {
+    const pendingRoom = {
+      ...room("active"),
+      puzzleId: "puzzle-1",
+      pendingSubmissions: [{ clueId: "A1", playerId: "p1", answer: "APPLE" }],
+    };
+    let gets = 0;
+    const mockFetch = vi.fn(async (_input: RequestInfo | URL, init?: RequestInit) => {
+      if (init?.method === "PUT") return response(200, { status: "ok" });
+      gets += 1;
+      return response(
+        200,
+        gets === 1 ? pendingRoom : { ...pendingRoom, pendingSubmissions: [] },
+      );
+    });
+    vi.stubGlobal("fetch", mockFetch);
+    vi.stubGlobal("confirm", vi.fn(() => true));
+
+    render(<AdminRoomDashboardPage />);
+    const approve = await screen.findByRole("button", {
+      name: /Approve clue A1 for Alice/i,
+    });
+    fireEvent.click(approve);
+
+    await waitFor(() => {
+      const puts = mockFetch.mock.calls.filter(
+        ([, init]) => (init as RequestInit | undefined)?.method === "PUT",
+      );
+      expect(puts.length).toBe(1);
+    });
+    const [putUrl, putInit] = mockFetch.mock.calls.find(
+      ([, init]) => (init as RequestInit | undefined)?.method === "PUT",
+    )!;
+    expect(String(putUrl).endsWith("/admin/puzzles/puzzle-1/clues/A1/answer")).toBe(true);
+    expect(JSON.parse((putInit as RequestInit).body as string)).toEqual({
+      answer: "APPLE",
+    });
+    await waitFor(() => expect(gets).toBeGreaterThanOrEqual(2));
   });
 });

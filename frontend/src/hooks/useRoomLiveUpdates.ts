@@ -99,8 +99,10 @@ export function useRoomLiveUpdates(
     };
 
     connect();
+    const poll = setInterval(fetchAuthoritativeState, 2000);
 
     return () => {
+      clearInterval(poll);
       clearReconnectTimer();
       eventSourceRef.current?.close();
       eventSourceRef.current = null;

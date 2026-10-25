@@ -22,9 +22,7 @@ export default function Scoreboard({ roomId }: ScoreboardProps) {
   useEffect(() => {
     let cancelled = false;
 
-    async function load() {
-      setLoading(true);
-      setError(null);
+    async function fetchScores() {
       try {
         const base = process.env.NEXT_PUBLIC_BACKEND_URL ?? "http://localhost:8000";
         const res = await fetch(`${base}/rooms/${roomId}/scores`, {
@@ -38,26 +36,29 @@ export default function Scoreboard({ roomId }: ScoreboardProps) {
         const body = (await res.json()) as ScoreEntry[];
         if (cancelled) return;
         setScores(Array.isArray(body) ? body : []);
+        setError(null);
       } catch {
         if (!cancelled) {
           setError("Network error. Please try again.");
         }
-      } finally {
-        if (!cancelled) {
-          setLoading(false);
-        }
       }
     }
 
-    load();
+    setLoading(true);
+    fetchScores().finally(() => {
+      if (!cancelled) setLoading(false);
+    });
+    const interval = setInterval(fetchScores, 2000);
+
     return () => {
       cancelled = true;
+      clearInterval(interval);
     };
   }, [roomId]);
 
   if (loading) {
     return (
-      <p role="status" className="text-gray-600">
+      <p role="status" className="muted">
         Loading...
       </p>
     );
@@ -65,14 +66,14 @@ export default function Scoreboard({ roomId }: ScoreboardProps) {
 
   if (error) {
     return (
-      <p role="alert" className="text-sm text-red-600">
+      <p role="alert" className="text-sm font-medium text-blue-700">
         {error}
       </p>
     );
   }
 
   if (scores.length === 0) {
-    return <p className="text-sm text-gray-500">No scores yet.</p>;
+    return <p className="muted text-sm">No scores yet.</p>;
   }
 
   return (
@@ -82,15 +83,15 @@ export default function Scoreboard({ roomId }: ScoreboardProps) {
         return (
           <li
             key={key}
-            className="flex items-center gap-3 rounded border border-gray-200 px-3 py-2"
+            className="glass-soft flex items-center gap-3 px-3 py-2"
           >
             <span
               data-testid="score-color"
-              className="inline-block h-4 w-4 rounded-full border border-gray-300"
+              className="inline-block h-4 w-4 rounded-full border border-blue-900/20 opacity-70"
               style={{ backgroundColor: entry.color }}
             />
-            <span className="text-sm font-medium">{entry.displayName}</span>
-            <span data-testid="score-value" className="ml-auto text-sm font-semibold">
+            <span className="text-sm font-medium text-blue-900">{entry.displayName}</span>
+            <span data-testid="score-value" className="ml-auto text-sm font-semibold text-blue-700">
               {entry.totalPoints}
             </span>
           </li>

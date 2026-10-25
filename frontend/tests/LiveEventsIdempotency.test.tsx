@@ -23,6 +23,30 @@ import RoomLobbyPage from "../src/app/rooms/[roomId]/page";
 
 const ROOM_ID = "room-1";
 
+const puzzle = {
+  puzzleId: "live-puzzle",
+  title: "Live",
+  width: 5,
+  height: 1,
+  cells: Array.from({ length: 5 }, (_, col) => ({
+    row: 0,
+    col,
+    type: "white",
+    number: col === 4 ? 1 : null,
+    startsAcross: col === 4,
+    startsDown: false,
+  })),
+  clues: [
+    {
+      clueId: "A1",
+      number: 1,
+      direction: "across" as const,
+      text: "",
+      answerLength: 5,
+    },
+  ],
+};
+
 function jsonResponse(body: unknown, status = 200): Response {
   return {
     ok: status >= 200 && status < 300,
@@ -57,19 +81,22 @@ function cellShadow(testId: string): string {
   return (screen.getByTestId(testId) as HTMLElement).style.boxShadow;
 }
 
-function answerDraft(): HTMLInputElement {
-  return screen.getByLabelText("Answer draft") as HTMLInputElement;
+function cellText(testId: string): string {
+  return screen.getByTestId(testId).textContent ?? "";
 }
 
-async function selectDraftForD1() {
-  const startCell = screen.getByTestId("cell-0-0");
-  fireEvent.click(startCell);
-  fireEvent.click(startCell);
-  await waitFor(() => {
-    expect(answerDraft()).toBeTruthy();
-  });
-  fireEvent.change(answerDraft(), { target: { value: "HELLO" } });
-  expect(answerDraft().value).toBe("HELLO");
+function typeOnGrid(text: string) {
+  const grid = screen.getByRole("application", { name: "Crossword grid" });
+  for (const char of text) {
+    fireEvent.keyDown(grid, { key: char });
+  }
+}
+
+async function selectAndType() {
+  fireEvent.click(screen.getByTestId("cell-0-4"));
+  typeOnGrid("HELLO");
+  expect(cellText("cell-0-4")).toContain("H");
+  expect(cellText("cell-0-0")).toContain("O");
 }
 
 beforeEach(() => {
@@ -81,6 +108,8 @@ beforeEach(() => {
         roomId: ROOM_ID,
         title: "Test Room",
         status: "active",
+        puzzle,
+        solvedClues: [],
         players: [],
       }),
     ),
@@ -105,10 +134,13 @@ describe("TASK-040 frontend live event idempotency", () => {
     });
 
     await waitFor(() => {
-      expect(cellShadow("cell-0-0")).toMatch(/#FF0000|rgb\(255,\s*0,\s*0\)/i);
+      expect(cellShadow("cell-0-0")).toMatch(/rgba\(255,\s*0,\s*0/i);
     });
-    expect(cellShadow("cell-0-1")).toMatch(/#FF0000|rgb\(255,\s*0,\s*0\)/i);
-    expect(cellShadow("cell-0-2")).toMatch(/#FF0000|rgb\(255,\s*0,\s*0\)/i);
+    expect(cellShadow("cell-0-1")).toMatch(/rgba\(255,\s*0,\s*0/i);
+    expect(cellShadow("cell-0-2")).toMatch(/rgba\(255,\s*0,\s*0/i);
+    expect(
+      (screen.getByTestId("cell-0-0") as HTMLElement).style.backgroundColor,
+    ).toMatch(/rgba\(255,\s*0,\s*0/i);
   });
 
   it("Given the board where A1 is already solved, when the exact same CLUE_SOLVED event arrives again, then the state remains completely unchanged with no errors or duplicates", async () => {
@@ -121,7 +153,7 @@ describe("TASK-040 frontend live event idempotency", () => {
 
     emit("CLUE_SOLVED", event);
     await waitFor(() => {
-      expect(cellShadow("cell-0-0")).toMatch(/#FF0000|rgb\(255,\s*0,\s*0\)/i);
+      expect(cellShadow("cell-0-0")).toMatch(/rgba\(255,\s*0,\s*0/i);
     });
 
     const before = {
@@ -140,16 +172,16 @@ describe("TASK-040 frontend live event idempotency", () => {
     expect(screen.queryByRole("alert")).toBeNull();
   });
 
-  it("Given the player typed HELLO into the local draft for D1, when ROOM_STATUS_CHANGED sets the room to paused, then the draft HELLO remains intact in the state", async () => {
+  it("Given the player typed HELLO into the grid for A1, when ROOM_STATUS_CHANGED sets the room to paused, then the letters remain intact and Submit is disabled", async () => {
     await renderBoard();
-    await selectDraftForD1();
+    await selectAndType();
 
     emit("ROOM_STATUS_CHANGED", { status: "paused" });
 
     await waitFor(() => {
-      expect(answerDraft().value).toBe("HELLO");
+      expect(cellText("cell-0-4")).toContain("H");
     });
-    expect(answerDraft().disabled).toBe(true);
+    expect(cellText("cell-0-0")).toContain("O");
     expect(
       (screen.getByRole("button", { name: "Submit" }) as HTMLButtonElement).disabled,
     ).toBe(true);
@@ -167,9 +199,9 @@ describe("TASK-040 frontend live event idempotency", () => {
     expect(screen.queryByRole("alert")).toBeNull();
   });
 
-  it("Acceptance: public CLUE_SOLVED events never touch the player's local unsubmitted draft", async () => {
+  it("Acceptance: public CLUE_SOLVED events never touch the player's local unsubmitted letters", async () => {
     await renderBoard();
-    await selectDraftForD1();
+    await selectAndType();
 
     emit("CLUE_SOLVED", {
       clueId: "A1",
@@ -178,9 +210,13 @@ describe("TASK-040 frontend live event idempotency", () => {
     });
 
     await waitFor(() => {
-      expect(cellShadow("cell-0-0")).toMatch(/#00FF00|rgb\(0,\s*255,\s*0\)/i);
+      expect(cellShadow("cell-0-0")).toMatch(/rgba\(0,\s*255,\s*0/i);
     });
-    expect(answerDraft().value).toBe("HELLO");
+    expect(
+      (screen.getByTestId("cell-0-1") as HTMLElement).style.backgroundColor,
+    ).toMatch(/rgba\(0,\s*255,\s*0/i);
+    expect(cellText("cell-0-4")).toContain("H");
+    expect(cellText("cell-0-0")).toContain("O");
   });
 
   it("Acceptance: out-of-order events (status change before clue solved, malformed and duplicate payloads) do not crash the board", async () => {
@@ -204,7 +240,7 @@ describe("TASK-040 frontend live event idempotency", () => {
     expect(screen.getByRole("application", { name: "Crossword grid" })).toBeTruthy();
     expect(screen.queryByRole("alert")).toBeNull();
     await waitFor(() => {
-      expect(cellShadow("cell-0-0")).toMatch(/#FF0000|rgb\(255,\s*0,\s*0\)/i);
+      expect(cellShadow("cell-0-0")).toMatch(/rgba\(255,\s*0,\s*0/i);
     });
   });
 });

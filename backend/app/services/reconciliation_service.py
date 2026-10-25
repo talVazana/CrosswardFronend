@@ -16,6 +16,7 @@ def reconcile_pending_submissions(room_id: str, clue_id: str, official_answer: s
     ]
     pending.sort(key=lambda s: s.serverTimestamp)
 
+    awarded_points = 0
     lock = _get_clue_lock(room_id, clue_id)
     with lock:
         for submission in pending:
@@ -39,6 +40,7 @@ def reconcile_pending_submissions(room_id: str, clue_id: str, official_answer: s
                     scoring_service.apply_score(
                         room_id, clue_id, submission.playerId, points, player_color
                     )
+                    awarded_points = max(awarded_points, points)
                 submission_repository.update_status(
                     submission.submissionId, SubmissionStatus.correct, points
                 )
@@ -46,3 +48,13 @@ def reconcile_pending_submissions(room_id: str, clue_id: str, official_answer: s
                 submission_repository.update_status(
                     submission.submissionId, SubmissionStatus.incorrect, 0
                 )
+
+    if awarded_points > 0:
+        from ..api.routes import events as events_module
+
+        public_state = scoring_service._default_service.get_public_clue_state(
+            room_id, clue_id
+        )
+        events_module.broadcast_clue_solved(
+            room_id, clue_id, public_state.firstSolverColor or "", awarded_points
+        )

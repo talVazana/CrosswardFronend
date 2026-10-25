@@ -86,6 +86,15 @@ class ScoringService:
             self._public_clue_states[key] = state
         return state
 
+    def list_solved_clues(self, room_id: str) -> list[dict]:
+        result = []
+        for (rid, clue_id), state in self._public_clue_states.items():
+            if rid == room_id and state.solved and state.firstSolverColor:
+                result.append(
+                    {"clueId": clue_id, "firstSolverColor": state.firstSolverColor}
+                )
+        return result
+
 
 _default_service = ScoringService(InMemoryScoreRepository())
 

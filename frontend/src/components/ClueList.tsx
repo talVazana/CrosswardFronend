@@ -14,7 +14,7 @@ export default function ClueList({
   onSelectClue,
 }: ClueListProps) {
   if (clues.length === 0) {
-    return <p className="text-sm text-gray-500">No clues.</p>;
+    return <p className="muted text-sm">No clues.</p>;
   }
 
   return (
@@ -27,18 +27,18 @@ export default function ClueList({
             key={clue.clueId}
             aria-current={isActive ? "true" : undefined}
             aria-label={`Clue ${clue.number} ${clue.direction === "across" ? "Across" : "Down"}${isSolved ? ", solved" : ""}`}
-            className={`rounded border px-3 py-2 text-sm ${
+            className={`glass-soft px-3 py-2 text-sm ${
               isActive
-                ? "border-blue-500 bg-blue-50 font-medium"
-                : "border-gray-200"
-            } ${isSolved ? "text-gray-500 line-through" : ""}`}
+                ? "border-blue-400 bg-blue-100/60 font-medium text-blue-900"
+                : "text-blue-900/80"
+            } ${isSolved ? "text-blue-400/60 line-through" : ""}`}
           >
             {onSelectClue ? (
               <button
                 type="button"
                 onClick={() => onSelectClue(clue)}
                 aria-current={isActive ? "true" : undefined}
-                className="w-full text-left"
+                className="w-full text-start"
               >
                 <span className="font-medium">
                   {clue.number} {clue.direction === "across" ? "Across" : "Down"}

@@ -1,7 +1,7 @@
 from abc import ABC, abstractmethod
 
 from ..models.answers import OfficialAnswers
-from ..models.gameplay import ScoreEvent, Submission, SubmissionStatus
+from ..models.gameplay import PlayerClueState, ScoreEvent, Submission, SubmissionStatus
 from ..models.puzzle import Puzzle
 from ..models.room import Player, Room
 
@@ -15,6 +15,9 @@ class RoomRepository(ABC):
 
     @abstractmethod
     def update(self, room: Room) -> None: ...
+
+    @abstractmethod
+    def list_all(self) -> list[Room]: ...
 
 
 class PlayerRepository(ABC):
@@ -56,6 +59,17 @@ class SubmissionRepository(ABC):
 
     @abstractmethod
     def update_status(self, submission_id: str, status: SubmissionStatus, points: int) -> None: ...
+
+
+class PlayerClueStateRepository(ABC):
+    @abstractmethod
+    def save(self, state: PlayerClueState, room_id: str) -> None: ...
+
+    @abstractmethod
+    def get(self, room_id: str, player_id: str, clue_id: str) -> PlayerClueState | None: ...
+
+    @abstractmethod
+    def list_by_player(self, room_id: str, player_id: str) -> list[PlayerClueState]: ...
 
 
 class ScoreRepository(ABC):

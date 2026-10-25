@@ -3,6 +3,7 @@ import { render, screen, fireEvent, cleanup, waitFor } from "@testing-library/re
 
 vi.mock("next/navigation", () => ({
   useParams: () => ({ roomId: "room-1" }),
+  useRouter: () => ({ push: vi.fn(), replace: vi.fn() }),
 }));
 
 vi.mock("../src/hooks/useRoomLiveUpdates", () => ({

@@ -12,15 +12,19 @@ from ...adapters.parser_adapter import (
 )
 from ...models.answers import OfficialAnswers
 from ...models.puzzle import Puzzle
-from ...repositories.in_memory import InMemoryAnswerRepository, InMemoryPuzzleRepository
+from ...repositories.in_memory import (
+    InMemoryAnswerRepository,
+    InMemoryPuzzleRepository,
+)
 from ...repositories.interfaces import AnswerRepository, PuzzleRepository
 from ...services.puzzle_utils import validate_puzzle_structure
+from . import admin as admin_module
 from . import rooms as rooms_module
 
 router = APIRouter()
 
 puzzle_repository: PuzzleRepository = InMemoryPuzzleRepository()
-answer_repository: AnswerRepository = InMemoryAnswerRepository()
+answer_repository: AnswerRepository = admin_module.answer_repository
 parser_adapter = PuzzleParserAdapter()
 
 

@@ -11,6 +11,7 @@ from ...repositories.interfaces import SubmissionRepository
 from ...services import scoring_service
 from ...services.puzzle_utils import normalize_answer
 from . import admin as admin_module
+from . import events as events_module
 from . import rooms as rooms_module
 
 router = APIRouter()
@@ -95,6 +96,14 @@ def submit_answer(roomId: str, clueId: str, body: SubmissionRequest, request: Re
         )
         if points > 0:
             scoring_service.apply_score(roomId, clueId, player_id, points, player_color)
+            submission_repository.update_status(
+                submission.submissionId, SubmissionStatus.correct, points
+            )
+            first_solver_color = (
+                player_color if points == 2 else scoring_service._default_service.get_public_clue_state(roomId, clueId).firstSolverColor or ""
+            )
+            events_module.broadcast_clue_solved(roomId, clueId, first_solver_color, points)
+            return {"status": "correct", "points": points}
         submission_repository.update_status(
             submission.submissionId, SubmissionStatus.correct, points
         )

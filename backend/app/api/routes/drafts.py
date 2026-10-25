@@ -49,7 +49,7 @@ def save_draft(roomId: str, clueId: str, body: DraftRequest, request: Request):
     room = rooms_module.room_repository.get(roomId)
     if room is None:
         raise HTTPException(status_code=404, detail="Room not found")
-    if room.status not in (RoomStatus.active, RoomStatus.paused):
+    if room.status not in (RoomStatus.lobby, RoomStatus.active, RoomStatus.paused):
         raise HTTPException(status_code=400, detail="Drafts are currently disabled")
     state = player_clue_state_repository.get(roomId, player_id, clueId)
     if state is None:

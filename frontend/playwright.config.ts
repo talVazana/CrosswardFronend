@@ -7,7 +7,7 @@ const frontendDir = __dirname;
 
 const BACKEND_PORT = 8001;
 const FRONTEND_PORT = 3000;
-const backendUrl = `http://127.0.0.1:${BACKEND_PORT}`;
+const backendUrl = `http://localhost:${BACKEND_PORT}`;
 
 const pythonCmd = process.platform === "win32" ? "py -3" : "python3";
 
@@ -43,7 +43,7 @@ export default defineConfig({
       command: `${pythonCmd} -m uvicorn app.main:app --host 127.0.0.1 --port ${BACKEND_PORT}`,
       cwd: backendDir,
       url: `${backendUrl}/health`,
-      reuseExistingServer: false,
+      reuseExistingServer: !process.env.CI,
       timeout: 60_000,
     },
     {
@@ -51,7 +51,7 @@ export default defineConfig({
       command: `npm run dev -- --port ${FRONTEND_PORT}`,
       cwd: frontendDir,
       url: `http://localhost:${FRONTEND_PORT}`,
-      reuseExistingServer: false,
+      reuseExistingServer: !process.env.CI,
       timeout: 60_000,
       env: {
         NEXT_PUBLIC_BACKEND_URL: backendUrl,

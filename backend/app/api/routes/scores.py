@@ -17,7 +17,11 @@ def get_room_scores(roomId: str):
         raise HTTPException(status_code=404, detail="Room not found")
 
     events = score_repository.list_by_room(roomId)
-    players = player_repository.list_by_room(roomId)
+    players = [
+        player
+        for player in player_repository.list_by_room(roomId)
+        if player.role == "player"
+    ]
 
     totals: dict[str, int] = {}
     for event in events:

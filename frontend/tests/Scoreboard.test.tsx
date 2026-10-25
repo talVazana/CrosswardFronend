@@ -7,6 +7,7 @@ const { mockUseParams } = vi.hoisted(() => ({
 
 vi.mock("next/navigation", () => ({
   useParams: mockUseParams,
+  useRouter: () => ({ push: vi.fn(), replace: vi.fn() }),
 }));
 
 import Scoreboard from "../src/components/Scoreboard";

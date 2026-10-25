@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
+import Link from "next/link";
 import { useParams } from "next/navigation";
 import CrosswordGrid, {
   LiveRoomEvent,
@@ -42,6 +43,7 @@ export default function RoomLobbyPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [liveEvent, setLiveEvent] = useState<LiveRoomEvent | null>(null);
+  const [showOriginal, setShowOriginal] = useState(false);
   const solvedClueIdsRef = useRef<Set<string>>(new Set());
 
   const handleLiveEvent = useCallback((event: MessageEvent) => {
@@ -60,6 +62,15 @@ export default function RoomLobbyPage() {
         }
         if (solvedClueIdsRef.current.has(clueId)) return;
         solvedClueIdsRef.current.add(clueId);
+        setRoom((prev) => {
+          if (!prev) return prev;
+          const existing = prev.solvedClues ?? [];
+          if (existing.some((entry) => entry.clueId === clueId)) return prev;
+          return {
+            ...prev,
+            solvedClues: [...existing, { clueId, firstSolverColor }],
+          };
+        });
         setLiveEvent({
           type: "CLUE_SOLVED",
           clueId,
@@ -125,6 +136,15 @@ export default function RoomLobbyPage() {
     };
   }, [roomId]);
 
+  useEffect(() => {
+    if (!showOriginal) return;
+    const onKey = (event: globalThis.KeyboardEvent) => {
+      if (event.key === "Escape") setShowOriginal(false);
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [showOriginal]);
+
   const players = room?.players ?? room?.participants ?? [];
   const puzzle = room?.puzzle;
   const solvedCluesMap = (room?.solvedClues ?? []).reduce<Record<string, string>>(
@@ -140,24 +160,40 @@ export default function RoomLobbyPage() {
   const solvedClueIdSet = new Set(Object.keys(solvedCluesMap));
 
   return (
-    <main className="mx-auto flex min-h-screen w-full max-w-xl flex-col gap-6 p-6 overflow-x-hidden">
+    <main className="mx-auto flex min-h-screen w-full max-w-4xl flex-col gap-6 overflow-x-hidden p-6">
       {loading ? (
         <LoadingSpinner />
       ) : error ? (
         <ErrorMessage message={error} />
       ) : room ? (
         <>
-          <header className="flex flex-col gap-1">
-            <h1 className="text-2xl font-semibold">{room.title}</h1>
-            {statusLabel ? (
-              <span className="inline-flex w-fit items-center gap-2 rounded-full bg-blue-50 px-3 py-1 text-sm font-medium text-blue-700">
-                <span className="inline-block h-2 w-2 rounded-full bg-blue-500" />
-                {statusLabel}
-              </span>
-            ) : null}
+          <header className="glass flex flex-wrap items-center justify-between gap-3 px-6 py-4">
+            <div className="flex flex-col gap-2">
+              <h1 className="brand text-2xl">{room.title ?? "Crossword"}</h1>
+              {statusLabel ? (
+                <span className="inline-flex w-fit items-center gap-2 rounded-full bg-blue-100/70 px-3 py-1 text-sm font-medium text-blue-700">
+                  <span className="inline-block h-2 w-2 rounded-full bg-blue-500" />
+                  {statusLabel}
+                </span>
+              ) : null}
+            </div>
+            <Link href="/" className="btn-ghost shrink-0 text-sm">
+              Home
+            </Link>
           </header>
-          <section className="flex flex-col gap-2">
-            <h2 className="text-lg font-medium">Puzzle</h2>
+          <section className="glass flex flex-col gap-2 px-6 py-4">
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <h2 className="text-lg font-semibold text-blue-800">Puzzle</h2>
+              {puzzle ? (
+                <button
+                  type="button"
+                  onClick={() => setShowOriginal(true)}
+                  className="btn-ghost text-sm"
+                >
+                  Show original image
+                </button>
+              ) : null}
+            </div>
             {puzzle ? (
               <CrosswordGrid
                 roomId={roomId}
@@ -174,26 +210,60 @@ export default function RoomLobbyPage() {
             )}
           </section>
           {puzzle ? (
-            <section className="flex flex-col gap-2">
-              <h2 className="text-lg font-medium">Clues</h2>
+            <section className="glass flex flex-col gap-2 px-6 py-4">
+              <h2 className="text-lg font-semibold text-blue-800">Clues</h2>
               <ClueList clues={puzzle.clues} solvedClueIds={solvedClueIdSet} />
             </section>
           ) : null}
-          <section className="flex flex-col gap-2">
-            <h2 className="text-lg font-medium">Participants</h2>
-            {players.length === 0 ? (
-              <EmptyState
-                title="No participants yet"
-                message="Players will appear here once they join the room."
-              />
-            ) : (
-              <ParticipantList players={players} />
-            )}
-          </section>
-          <section className="flex flex-col gap-2">
-            <h2 className="text-lg font-medium">Scoreboard</h2>
-            <Scoreboard roomId={roomId} />
-          </section>
+          <div className="grid gap-6 md:grid-cols-2">
+            <section className="glass flex flex-col gap-2 px-6 py-4">
+              <h2 className="text-lg font-semibold text-blue-800">Participants</h2>
+              {players.length === 0 ? (
+                <EmptyState
+                  title="No participants yet"
+                  message="Players will appear here once they join the room."
+                />
+              ) : (
+                <ParticipantList players={players} />
+              )}
+            </section>
+            <section className="glass flex flex-col gap-2 px-6 py-4">
+              <h2 className="text-lg font-semibold text-blue-800">Scoreboard</h2>
+              <Scoreboard roomId={roomId} />
+            </section>
+          </div>
+          {showOriginal ? (
+            <div
+              role="dialog"
+              aria-modal="true"
+              aria-label="Original puzzle image"
+              className="fixed inset-0 z-50 flex items-center justify-center bg-blue-950/60 p-4 backdrop-blur-sm"
+              onClick={() => setShowOriginal(false)}
+            >
+              <div
+                className="glass-strong flex max-h-[92vh] w-full max-w-3xl flex-col gap-3 p-4"
+                onClick={(event) => event.stopPropagation()}
+              >
+                <div className="flex items-center justify-between gap-3">
+                  <h2 className="text-lg font-semibold text-blue-900">Original puzzle</h2>
+                  <button
+                    type="button"
+                    onClick={() => setShowOriginal(false)}
+                    className="btn-ghost text-sm"
+                  >
+                    Close
+                  </button>
+                </div>
+                <div className="min-h-0 flex-1 overflow-auto">
+                  <img
+                    src="/puzzle-source.jpg"
+                    alt="Original published crossword page for this room"
+                    className="mx-auto h-auto w-full rounded-lg"
+                  />
+                </div>
+              </div>
+            </div>
+          ) : null}
         </>
       ) : null}
     </main>

@@ -219,3 +219,27 @@ def test_edge_already_non_pending_submissions_are_ignored(repositories):
     assert unchanged.status == SubmissionStatus.correct
     assert unchanged.pointsAwarded == 0
     assert submission_repository.get("sub-pending").pointsAwarded == 2
+
+
+def test_reconciliation_broadcasts_clue_solved_with_first_solver_color(
+    repositories, monkeypatch
+):
+    submission_repository, _ = repositories
+    submission_repository.add(make_submission("sub-a", "player-a", "BANANA", T1))
+    submission_repository.add(make_submission("sub-b", "player-b", "APPLE", T2))
+
+    from app.api.routes import events as events_module
+
+    broadcast = []
+    monkeypatch.setattr(
+        events_module,
+        "broadcast_clue_solved",
+        lambda room_id, clue_id, color, points: broadcast.append(
+            (room_id, clue_id, color, points)
+        ),
+    )
+
+    reconcile_pending_submissions(ROOM_ID, CLUE_ID, "APPLE")
+
+    assert broadcast == [(ROOM_ID, CLUE_ID, "#AABBCC", 2)]
+

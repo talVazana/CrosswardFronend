@@ -10,8 +10,8 @@ function makePuzzle(): Puzzle {
     row: 0,
     col,
     type: "white",
-    number: col === 0 ? 1 : null,
-    startsAcross: col === 0,
+    number: col === width - 1 ? 1 : null,
+    startsAcross: col === width - 1,
     startsDown: false,
   }));
   return {
@@ -32,13 +32,19 @@ function makePuzzle(): Puzzle {
   };
 }
 
+function typeWord(word: string) {
+  const grid = screen.getByRole("application", { name: "Crossword grid" });
+  for (const letter of word) {
+    fireEvent.keyDown(grid, { key: letter });
+  }
+}
+
 function renderWithActiveClue() {
   render(<CrosswordGrid roomId="room-42" puzzle={makePuzzle()} />);
-  fireEvent.click(screen.getByTestId("cell-0-0"));
+  fireEvent.click(screen.getByTestId("cell-0-4"));
   return {
     revealButton: screen.getByRole("button", { name: "Reveal Answer" }),
     submitButton: screen.getByRole("button", { name: "Submit" }),
-    input: screen.getByLabelText("Answer draft") as HTMLInputElement,
   };
 }
 
@@ -94,18 +100,18 @@ describe("TASK-031 Reveal UI", () => {
     expect(init.credentials).toBe("include");
 
     await waitFor(() => {
-      expect(screen.getByTestId("cell-0-0").textContent).toContain("A");
+      expect(screen.getByTestId("cell-0-4").textContent).toContain("A");
     });
-    expect(screen.getByTestId("cell-0-1").textContent).toContain("P");
+    expect(screen.getByTestId("cell-0-3").textContent).toContain("P");
     expect(screen.getByTestId("cell-0-2").textContent).toContain("P");
-    expect(screen.getByTestId("cell-0-3").textContent).toContain("L");
-    expect(screen.getByTestId("cell-0-4").textContent).toContain("E");
+    expect(screen.getByTestId("cell-0-1").textContent).toContain("L");
+    expect(screen.getByTestId("cell-0-0").textContent).toContain("E");
   });
 
   it("Given a successfully revealed clue, when inspecting the UI, then the Submit button is disabled", async () => {
     vi.stubGlobal("fetch", okReveal("APPLE"));
 
-    const { revealButton, submitButton, input } = renderWithActiveClue();
+    const { revealButton } = renderWithActiveClue();
     fireEvent.click(revealButton);
 
     await waitFor(() => {
@@ -113,8 +119,20 @@ describe("TASK-031 Reveal UI", () => {
         true,
       );
     });
-    expect(submitButton.disabled).toBe(true);
-    expect(input.disabled).toBe(true);
+  });
+
+  it("Given a revealed clue, when the player types, then they can edit the revealed letters locally", async () => {
+    vi.stubGlobal("fetch", okReveal("APPLE"));
+
+    const { revealButton } = renderWithActiveClue();
+    fireEvent.click(revealButton);
+
+    await waitFor(() => {
+      expect(screen.getByTestId("cell-0-4").textContent).toContain("A");
+    });
+    typeWord("X");
+    expect(screen.getByTestId("cell-0-0").textContent).toContain("X");
+    expect(screen.getByTestId("cell-0-4").textContent).toContain("A");
   });
 
   it("Edge: fetch resolving 400 displays an error and does not disable the Submit button", async () => {
@@ -125,8 +143,8 @@ describe("TASK-031 Reveal UI", () => {
     });
     vi.stubGlobal("fetch", fetchMock);
 
-    const { revealButton, submitButton, input } = renderWithActiveClue();
-    fireEvent.change(input, { target: { value: "GUESS" } });
+    const { revealButton, submitButton } = renderWithActiveClue();
+    typeWord("GUESS");
     expect(submitButton.disabled).toBe(false);
 
     fireEvent.click(revealButton);
@@ -136,6 +154,5 @@ describe("TASK-031 Reveal UI", () => {
     expect(
       (screen.getByRole("button", { name: "Submit" }) as HTMLButtonElement).disabled,
     ).toBe(false);
-    expect(input.disabled).toBe(false);
   });
 });

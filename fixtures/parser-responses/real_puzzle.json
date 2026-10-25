@@ -1,0 +1,298 @@
+{
+    "rows": 11,
+    "cols": 11,
+    "matrix": [
+        [
+            2,
+            1,
+            2,
+            1,
+            2,
+            0,
+            2,
+            1,
+            2,
+            1,
+            2
+        ],
+        [
+            1,
+            0,
+            1,
+            0,
+            1,
+            0,
+            1,
+            0,
+            1,
+            0,
+            1
+        ],
+        [
+            1,
+            1,
+            1,
+            1,
+            2,
+            0,
+            1,
+            1,
+            1,
+            1,
+            2
+        ],
+        [
+            1,
+            0,
+            1,
+            0,
+            1,
+            0,
+            0,
+            0,
+            1,
+            0,
+            1
+        ],
+        [
+            1,
+            2,
+            0,
+            1,
+            1,
+            1,
+            2,
+            1,
+            1,
+            2,
+            0
+        ],
+        [
+            1,
+            0,
+            2,
+            0,
+            1,
+            0,
+            1,
+            0,
+            1,
+            0,
+            2
+        ],
+        [
+            0,
+            1,
+            1,
+            1,
+            1,
+            1,
+            1,
+            2,
+            0,
+            1,
+            2
+        ],
+        [
+            2,
+            0,
+            1,
+            0,
+            0,
+            0,
+            1,
+            0,
+            2,
+            0,
+            1
+        ],
+        [
+            1,
+            1,
+            1,
+            1,
+            2,
+            0,
+            1,
+            1,
+            1,
+            1,
+            2
+        ],
+        [
+            1,
+            0,
+            1,
+            0,
+            1,
+            0,
+            1,
+            0,
+            1,
+            0,
+            1
+        ],
+        [
+            1,
+            1,
+            1,
+            1,
+            2,
+            0,
+            1,
+            1,
+            1,
+            1,
+            2
+        ]
+    ],
+    "clues": [
+        {
+            "clue_number": 1,
+            "row": 0,
+            "col": 10,
+            "horizontal": true,
+            "vertical": true
+        },
+        {
+            "clue_number": 2,
+            "row": 0,
+            "col": 8,
+            "horizontal": false,
+            "vertical": true
+        },
+        {
+            "clue_number": 3,
+            "row": 0,
+            "col": 6,
+            "horizontal": false,
+            "vertical": true
+        },
+        {
+            "clue_number": 4,
+            "row": 0,
+            "col": 4,
+            "horizontal": true,
+            "vertical": true
+        },
+        {
+            "clue_number": 5,
+            "row": 0,
+            "col": 2,
+            "horizontal": false,
+            "vertical": true
+        },
+        {
+            "clue_number": 6,
+            "row": 0,
+            "col": 0,
+            "horizontal": false,
+            "vertical": true
+        },
+        {
+            "clue_number": 7,
+            "row": 2,
+            "col": 10,
+            "horizontal": true,
+            "vertical": false
+        },
+        {
+            "clue_number": 8,
+            "row": 2,
+            "col": 4,
+            "horizontal": true,
+            "vertical": false
+        },
+        {
+            "clue_number": 9,
+            "row": 4,
+            "col": 9,
+            "horizontal": true,
+            "vertical": false
+        },
+        {
+            "clue_number": 10,
+            "row": 4,
+            "col": 6,
+            "horizontal": false,
+            "vertical": true
+        },
+        {
+            "clue_number": 11,
+            "row": 4,
+            "col": 1,
+            "horizontal": true,
+            "vertical": false
+        },
+        {
+            "clue_number": 12,
+            "row": 5,
+            "col": 10,
+            "horizontal": false,
+            "vertical": true
+        },
+        {
+            "clue_number": 13,
+            "row": 5,
+            "col": 2,
+            "horizontal": false,
+            "vertical": true
+        },
+        {
+            "clue_number": 14,
+            "row": 6,
+            "col": 10,
+            "horizontal": true,
+            "vertical": false
+        },
+        {
+            "clue_number": 15,
+            "row": 6,
+            "col": 7,
+            "horizontal": true,
+            "vertical": false
+        },
+        {
+            "clue_number": 16,
+            "row": 7,
+            "col": 8,
+            "horizontal": false,
+            "vertical": true
+        },
+        {
+            "clue_number": 17,
+            "row": 7,
+            "col": 0,
+            "horizontal": false,
+            "vertical": true
+        },
+        {
+            "clue_number": 18,
+            "row": 8,
+            "col": 10,
+            "horizontal": true,
+            "vertical": false
+        },
+        {
+            "clue_number": 19,
+            "row": 8,
+            "col": 4,
+            "horizontal": true,
+            "vertical": true
+        },
+        {
+            "clue_number": 20,
+            "row": 10,
+            "col": 10,
+            "horizontal": true,
+            "vertical": false
+        },
+        {
+            "clue_number": 21,
+            "row": 10,
+            "col": 4,
+            "horizontal": true,
+            "vertical": false
+        }
+    ]
+}

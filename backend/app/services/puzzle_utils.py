@@ -23,7 +23,7 @@ def _count_white(puzzle: Puzzle, start: Cell, direction: str) -> int:
             break
         count += 1
         if direction == "across":
-            col += 1
+            col -= 1
         else:
             row += 1
     return count

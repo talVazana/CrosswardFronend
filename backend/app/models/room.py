@@ -16,6 +16,18 @@ class RoomStatus(str, Enum):
     closed = "closed"
 
 
+ASSIGNED_PLAYER_COLORS: tuple[str, ...] = (
+    "#F87171",
+    "#FB923C",
+    "#FACC15",
+    "#34D399",
+    "#22D3EE",
+    "#60A5FA",
+    "#A78BFA",
+    "#F472B6",
+)
+
+
 def utc_now() -> datetime:
     return datetime.now(timezone.utc)
 

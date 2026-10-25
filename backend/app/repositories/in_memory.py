@@ -1,9 +1,10 @@
 from ..models.answers import OfficialAnswers
-from ..models.gameplay import ScoreEvent, Submission, SubmissionStatus
+from ..models.gameplay import PlayerClueState, ScoreEvent, Submission, SubmissionStatus
 from ..models.puzzle import Puzzle
 from ..models.room import Player, Room
 from .interfaces import (
     AnswerRepository,
+    PlayerClueStateRepository,
     PlayerRepository,
     PuzzleRepository,
     RoomRepository,
@@ -13,7 +14,7 @@ from .interfaces import (
 
 
 class InMemoryRoomRepository(RoomRepository):
-    def __init__(self) -> None:
+    def __init__(self):
         self._rooms: dict[str, Room] = {}
 
     def create(self, room: Room) -> None:
@@ -25,9 +26,12 @@ class InMemoryRoomRepository(RoomRepository):
     def update(self, room: Room) -> None:
         self._rooms[room.roomId] = room
 
+    def list_all(self) -> list[Room]:
+        return list(self._rooms.values())
+
 
 class InMemoryPlayerRepository(PlayerRepository):
-    def __init__(self) -> None:
+    def __init__(self):
         self._players: dict[tuple[str, str], Player] = {}
 
     def add(self, player: Player) -> None:
@@ -41,18 +45,18 @@ class InMemoryPlayerRepository(PlayerRepository):
 
 
 class InMemoryPuzzleRepository(PuzzleRepository):
-    def __init__(self) -> None:
-        self._snapshots: dict[str, Puzzle] = {}
+    def __init__(self):
+        self._puzzles: dict[str, Puzzle] = {}
 
     def save_snapshot(self, puzzle: Puzzle) -> None:
-        self._snapshots[puzzle.puzzleId] = puzzle
+        self._puzzles[puzzle.puzzleId] = puzzle
 
     def get_snapshot(self, puzzle_id: str) -> Puzzle | None:
-        return self._snapshots.get(puzzle_id)
+        return self._puzzles.get(puzzle_id)
 
 
 class InMemoryAnswerRepository(AnswerRepository):
-    def __init__(self) -> None:
+    def __init__(self):
         self._answers: dict[str, OfficialAnswers] = {}
 
     def save(self, answers: OfficialAnswers) -> None:
@@ -63,7 +67,7 @@ class InMemoryAnswerRepository(AnswerRepository):
 
 
 class InMemorySubmissionRepository(SubmissionRepository):
-    def __init__(self) -> None:
+    def __init__(self):
         self._submissions: dict[str, Submission] = {}
 
     def add(self, submission: Submission) -> None:
@@ -85,11 +89,28 @@ class InMemorySubmissionRepository(SubmissionRepository):
             return
         submission.status = status
         submission.pointsAwarded = points
-        self._submissions[submission_id] = submission
+
+
+class InMemoryPlayerClueStateRepository(PlayerClueStateRepository):
+    def __init__(self):
+        self.states: dict[tuple[str, str, str], PlayerClueState] = {}
+
+    def save(self, state: PlayerClueState, room_id: str) -> None:
+        self.states[(room_id, state.playerId, state.clueId)] = state
+
+    def get(self, room_id: str, player_id: str, clue_id: str) -> PlayerClueState | None:
+        return self.states.get((room_id, player_id, clue_id))
+
+    def list_by_player(self, room_id: str, player_id: str) -> list[PlayerClueState]:
+        return [
+            state
+            for (rid, pid, _), state in self.states.items()
+            if rid == room_id and pid == player_id
+        ]
 
 
 class InMemoryScoreRepository(ScoreRepository):
-    def __init__(self) -> None:
+    def __init__(self):
         self._events: dict[str, ScoreEvent] = {}
 
     def add_event(self, event: ScoreEvent) -> None:

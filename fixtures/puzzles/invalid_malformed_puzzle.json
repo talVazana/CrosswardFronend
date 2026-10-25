@@ -1,0 +1,13 @@
+{
+  "puzzleId": "invalid-puzzle",
+  "title": "Malformed Puzzle",
+  "width": 5,
+  "height": 5,
+  "cells": [
+    {"row": 7, "col": 9, "type": "white", "number": 1, "startsAcross": true, "startsDown": true},
+    {"row": 0, "col": 1, "type": "white", "startsAcross": false}
+  ],
+  "clues": [
+    {"clueId": "A1", "number": 1, "direction": "across"}
+  ]
+}

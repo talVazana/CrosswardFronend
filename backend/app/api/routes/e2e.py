@@ -1,0 +1,120 @@
+import json
+import secrets
+from pathlib import Path
+
+from fastapi import APIRouter, HTTPException
+from pydantic import BaseModel
+
+from ...adapters.parser_adapter import normalize_parser_response
+from ...models.answers import OfficialAnswers
+from ...models.puzzle import Puzzle
+from ...models.room import Player, Room, RoomStatus
+from ...services import scoring_service
+from ...services.puzzle_utils import validate_puzzle_structure
+from . import admin_puzzles as admin_puzzles_module
+from . import rooms as rooms_module
+from . import submissions as submissions_module
+
+router = APIRouter()
+
+REAL_PUZZLE_PATH = (
+    Path(__file__).resolve().parents[4]
+    / "fixtures"
+    / "parser-responses"
+    / "real_puzzle.json"
+)
+
+
+def _load_real_puzzle() -> Puzzle:
+    with REAL_PUZZLE_PATH.open("r", encoding="utf-8") as f:
+        raw = json.load(f)
+    return normalize_parser_response(raw)
+
+
+def _reset_room(room_id: str) -> None:
+    rooms_module.room_repository._rooms.pop(room_id, None)
+    rooms_module.player_repository._players = {
+        k: v for k, v in rooms_module.player_repository._players.items() if k[0] != room_id
+    }
+    scoring_service._default_service._score_repository._events = {
+        k: v
+        for k, v in scoring_service._default_service._score_repository._events.items()
+        if v.roomId != room_id
+    }
+    submissions_module.submission_repository._submissions = {
+        k: v
+        for k, v in submissions_module.submission_repository._submissions.items()
+        if v.roomId != room_id
+    }
+    rooms_module._sessions = {
+        k: v for k, v in rooms_module._sessions.items() if v[0] != room_id
+    }
+
+
+class E2ESeedRequest(BaseModel):
+    roomId: str
+    title: str = "E2E Room"
+    puzzle: Puzzle | None = None
+    officialAnswers: OfficialAnswers | None = None
+    status: RoomStatus = RoomStatus.active
+
+
+@router.post("/e2e/seed", status_code=201)
+def seed_room(body: E2ESeedRequest):
+    answers_provided = body.officialAnswers is not None
+    puzzle = body.puzzle
+    official_answers = body.officialAnswers
+    if puzzle is None:
+        puzzle = _load_real_puzzle()
+    if official_answers is None:
+        official_answers = OfficialAnswers(puzzleId=puzzle.puzzleId, answers={})
+
+    if official_answers.puzzleId != puzzle.puzzleId:
+        raise HTTPException(
+            status_code=400,
+            detail="officialAnswers.puzzleId must match puzzle.puzzleId",
+        )
+
+    errors = validate_puzzle_structure(puzzle)
+    if answers_provided:
+        clue_ids = {clue.clueId for clue in puzzle.clues}
+        missing = sorted(clue_ids - set(official_answers.answers.keys()))
+        if missing:
+            errors.append(f"Missing official answers for clues: {', '.join(missing)}")
+    if errors:
+        raise HTTPException(status_code=400, detail={"errors": errors})
+
+    puzzle_id = f"puzzle-{secrets.token_hex(8)}"
+    saved_puzzle = puzzle.model_copy(update={"puzzleId": puzzle_id})
+    saved_answers = official_answers.model_copy(update={"puzzleId": puzzle_id})
+    admin_puzzles_module.puzzle_repository.save_snapshot(saved_puzzle)
+    admin_puzzles_module.answer_repository.save(saved_answers)
+
+    _reset_room(body.roomId)
+
+    admin_id = f"admin-{secrets.token_hex(8)}"
+    admin_player = Player(
+        roomId=body.roomId,
+        playerId=admin_id,
+        displayName="E2E Admin",
+        color="#FF0000",
+        role="admin",
+    )
+    rooms_module.player_repository.add(admin_player)
+    admin_token = secrets.token_hex(16)
+    rooms_module._sessions[admin_token] = (body.roomId, admin_id)
+
+    room = Room(
+        roomId=body.roomId,
+        title=body.title,
+        status=body.status,
+        puzzleSnapshot=saved_puzzle,
+        creatorId=admin_id,
+    )
+    rooms_module.room_repository.create(room)
+    return {
+        "roomId": room.roomId,
+        "puzzleId": puzzle_id,
+        "status": room.status.value,
+        "adminSessionToken": admin_token,
+    }

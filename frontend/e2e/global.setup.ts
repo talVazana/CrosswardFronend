@@ -2,7 +2,7 @@ import { request, FullConfig, APIRequestContext } from "@playwright/test";
 import * as path from "path";
 import * as fs from "fs";
 
-const BACKEND_URL = process.env.E2E_BACKEND_URL ?? "http://127.0.0.1:8001";
+const BACKEND_URL = process.env.E2E_BACKEND_URL ?? "http://localhost:8001";
 const ROOM_ID = "E2E-Room-1";
 const PUZZLE_ID = "e2e-puzzle-001";
 
@@ -47,9 +47,13 @@ export default async function globalSetup(_config: FullConfig) {
         status: "active",
       },
     });
-    if (!seedRes.ok()) {
-      throw new Error(`Failed to seed room: ${seedRes.status()} ${await seedRes.text()}`);
-    }
+  if (!seedRes.ok()) {
+    throw new Error(`Failed to seed room: ${seedRes.status()} ${await seedRes.text()}`);
+  }
+  const seedBody = (await seedRes.json()) as { adminSessionToken?: string };
+  if (seedBody.adminSessionToken) {
+    process.env.ADMIN_SESSION_TOKEN = seedBody.adminSessionToken;
+  }
 
     const stateRes = await backend.get(`/rooms/${ROOM_ID}/state`);
     if (!stateRes.ok()) {

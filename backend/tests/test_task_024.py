@@ -14,8 +14,11 @@ from app.repositories.in_memory import (
     InMemoryAnswerRepository,
     InMemoryPlayerRepository,
     InMemoryRoomRepository,
+    InMemoryScoreRepository,
     InMemorySubmissionRepository,
 )
+from app.services import scoring_service
+from app.services.scoring_service import ScoringService
 
 ROOM_ID = "room-1"
 PLAYER_ID = "player-1"
@@ -105,6 +108,7 @@ def client():
     admin_module.answer_repository = answer_repository
     submissions_module.answer_repository = answer_repository
     submissions_module.submission_repository = submission_repository
+    scoring_service._default_service = ScoringService(InMemoryScoreRepository())
 
     with TestClient(app, base_url="https://testserver") as test_client:
         test_client.cookies.set("Session-Token", TOKEN)
@@ -133,7 +137,7 @@ def test_correct_answer_returns_200_and_status_correct(client):
     response = submit_answer(test_client, "A1", "apple")
 
     assert response.status_code == 200
-    assert response.json() == {"status": "correct"}
+    assert response.json() == {"status": "correct", "points": 2}
 
 
 def test_incorrect_answer_returns_200_and_status_incorrect(client):
@@ -164,7 +168,7 @@ def test_no_official_answers_at_all_returns_200_and_status_pending(client):
     assert response.json() == {"status": "pending"}
 
 
-def test_saved_submission_has_server_utc_timestamp_and_zero_points(client):
+def test_saved_submission_has_server_utc_timestamp_and_awarded_points(client):
     test_client, submission_repository = client
     before = datetime.now(timezone.utc)
 
@@ -172,13 +176,13 @@ def test_saved_submission_has_server_utc_timestamp_and_zero_points(client):
 
     after = datetime.now(timezone.utc)
     assert response.status_code == 200
-    assert response.json() == {"status": "correct"}
+    assert response.json() == {"status": "correct", "points": 2}
     assert len(submission_repository.added) == 1
 
     saved = submission_repository.added[0]
     assert_utc_aware(saved.serverTimestamp)
     assert before <= saved.serverTimestamp <= after
-    assert saved.pointsAwarded == 0
+    assert saved.pointsAwarded == 2
     assert saved.status.value == "correct"
     assert saved.roomId == ROOM_ID
     assert saved.playerId == PLAYER_ID
@@ -192,7 +196,7 @@ def test_padded_and_mixed_case_answer_evaluates_correct(client):
     response = submit_answer(test_client, "A1", "  aPpLe  ")
 
     assert response.status_code == 200
-    assert response.json() == {"status": "correct"}
+    assert response.json() == {"status": "correct", "points": 2}
 
 
 def test_excessive_whitespace_and_nbsp_normalize_to_correct(client):
@@ -201,7 +205,7 @@ def test_excessive_whitespace_and_nbsp_normalize_to_correct(client):
     response = submit_answer(test_client, "A1", "\t\u00a0 APPLE \u00a0\n")
 
     assert response.status_code == 200
-    assert response.json() == {"status": "correct"}
+    assert response.json() == {"status": "correct", "points": 2}
 
 
 def test_special_characters_that_do_not_normalize_to_answer_are_incorrect(client):

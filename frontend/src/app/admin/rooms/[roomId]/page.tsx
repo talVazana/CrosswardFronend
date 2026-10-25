@@ -1,9 +1,12 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
+import Link from "next/link";
 import { useParams } from "next/navigation";
+import AdminCrossword from "@/components/AdminCrossword";
 import ParticipantList, { Participant } from "@/components/ParticipantList";
 import Scoreboard from "@/components/Scoreboard";
+import type { Puzzle } from "@/components/CrosswordGrid";
 import LoadingSpinner from "@/components/ui/LoadingSpinner";
 import ErrorMessage from "@/components/ui/ErrorMessage";
 import EmptyState from "@/components/ui/EmptyState";
@@ -28,6 +31,10 @@ interface AdminRoomState {
   id?: string;
   title?: string;
   status?: RoomStatus | string;
+  puzzleId?: string;
+  puzzle?: Puzzle;
+  officialAnswers?: Record<string, string>;
+  solvedClues?: { clueId: string; firstSolverColor: string }[];
   players?: Participant[];
   participants?: Participant[];
   pendingSubmissions?: PendingSubmission[];
@@ -76,18 +83,24 @@ export default function AdminRoomDashboardPage() {
   const [room, setRoom] = useState<AdminRoomState | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [unauthorized, setUnauthorized] = useState(false);
   const [actionError, setActionError] = useState<string | null>(null);
   const [busy, setBusy] = useState<LifecycleAction | null>(null);
+  const [approving, setApproving] = useState<string | null>(null);
   const lastActionRef = useRef<LifecycleAction | null>(null);
 
-  const load = useCallback(async () => {
-    setLoading(true);
+  const load = useCallback(async (showSpinner = true) => {
+    if (showSpinner) setLoading(true);
     setError(null);
     try {
       const base = process.env.NEXT_PUBLIC_BACKEND_URL ?? "http://localhost:8000";
       const res = await fetch(`${base}/admin/rooms/${roomId}`, {
         credentials: "include",
       });
+      if (res.status === 401 || res.status === 403) {
+        setUnauthorized(true);
+        return;
+      }
       if (res.status === 404) {
         let stateRes = await fetch(`${base}/rooms/${roomId}/state`, {
           credentials: "include",
@@ -107,7 +120,7 @@ export default function AdminRoomDashboardPage() {
     } catch {
       setError("Network error. Please try again.");
     } finally {
-      setLoading(false);
+      if (showSpinner) setLoading(false);
     }
   }, [roomId]);
 
@@ -146,33 +159,110 @@ export default function AdminRoomDashboardPage() {
     [roomId, load]
   );
 
+  const approveSubmission = useCallback(
+    async (submission: PendingSubmission, index: number) => {
+      if (!submission.clueId || !submission.answer) return;
+      if (!room?.puzzleId) {
+        setActionError("Room puzzle is unavailable");
+        return;
+      }
+
+      const confirmed = window.confirm(
+        `Approve clue ${submission.clueId} with answer "${submission.answer}"? This scores matching submissions and colors the clue for every player.`,
+      );
+      if (!confirmed) return;
+
+      const key = `${submission.clueId}:${submission.playerId ?? "unknown"}:${index}`;
+      setApproving(key);
+      setActionError(null);
+      try {
+        const base = process.env.NEXT_PUBLIC_BACKEND_URL ?? "http://localhost:8000";
+        const res = await fetch(
+          `${base}/admin/puzzles/${room.puzzleId}/clues/${submission.clueId}/answer`,
+          {
+            method: "PUT",
+            headers: { "Content-Type": "application/json" },
+            credentials: "include",
+            body: JSON.stringify({ answer: submission.answer }),
+          },
+        );
+        if (!res.ok) {
+          setActionError(`Failed to approve clue (status ${res.status})`);
+          return;
+        }
+        await load();
+      } catch {
+        setActionError("Network error. Please try again.");
+      } finally {
+        setApproving(null);
+      }
+    },
+    [room?.puzzleId, load],
+  );
+
   const status = room?.status;
   const statusLabel = status ? (STATUS_LABELS[status] ?? status) : null;
   const players = room?.players ?? room?.participants ?? [];
   const pendingSubmissions = room?.pendingSubmissions ?? room?.pending ?? [];
   const scores = room?.scores ?? [];
   const actions = allowedActions(status);
+  const solvedClues = (room?.solvedClues ?? []).reduce<Record<string, string>>(
+    (acc, entry) => {
+      acc[entry.clueId] = entry.firstSolverColor;
+      return acc;
+    },
+    {},
+  );
 
   return (
-    <main className="mx-auto flex min-h-screen w-full max-w-xl flex-col gap-6 p-6">
+    <main className="mx-auto flex min-h-screen w-full max-w-3xl flex-col gap-6 p-6">
       {loading ? (
         <LoadingSpinner />
+      ) : unauthorized ? (
+        <section className="glass flex flex-col gap-3 px-6 py-8">
+          <h1 className="text-2xl font-semibold text-blue-900">Admin sign-in required</h1>
+          <p className="muted text-sm">
+            This dashboard is only available to administrators. Sign in with the
+            admin session token to continue.
+          </p>
+          <Link href="/admin/rooms" className="btn-primary w-fit text-sm">
+            Go to admin entry
+          </Link>
+        </section>
       ) : error ? (
         <ErrorMessage message={error} onRetry={load} />
       ) : room ? (
         <>
-          <header className="flex flex-col gap-1">
-            <h1 className="text-2xl font-semibold">{room.title ?? "Admin Dashboard"}</h1>
-            {statusLabel ? (
-              <span className="inline-flex w-fit items-center gap-2 rounded-full bg-blue-50 px-3 py-1 text-sm font-medium text-blue-700">
-                <span className="inline-block h-2 w-2 rounded-full bg-blue-500" />
-                {statusLabel}
-              </span>
-            ) : null}
+          <header className="glass flex flex-wrap items-center justify-between gap-3 px-6 py-4">
+            <div className="flex flex-col gap-2">
+              <h1 className="brand text-2xl">{room.title ?? "Admin Dashboard"}</h1>
+              {statusLabel ? (
+                <span className="inline-flex w-fit items-center gap-2 rounded-full bg-blue-100/70 px-3 py-1 text-sm font-medium text-blue-700">
+                  <span className="inline-block h-2 w-2 rounded-full bg-blue-500" />
+                  {statusLabel}
+                </span>
+              ) : null}
+            </div>
+            <div className="flex shrink-0 gap-2">
+              <button
+                type="button"
+                onClick={() => void load(false)}
+                disabled={loading}
+                className="btn-ghost text-sm"
+              >
+                Refresh
+              </button>
+              <Link href="/admin/rooms" className="btn-ghost text-sm">
+                All rooms
+              </Link>
+              <Link href="/" className="btn-ghost text-sm">
+                Home
+              </Link>
+            </div>
           </header>
 
-          <section className="flex flex-col gap-3" aria-label="Room controls">
-            <h2 className="text-lg font-medium">Controls</h2>
+          <section className="glass flex flex-col gap-3 px-6 py-4" aria-label="Room controls">
+            <h2 className="text-lg font-semibold text-blue-800">Controls</h2>
             <div className="flex flex-wrap gap-2">
               {(Object.keys(ACTION_LABELS) as LifecycleAction[]).map((action) => {
                 const enabled = actions.includes(action);
@@ -182,7 +272,7 @@ export default function AdminRoomDashboardPage() {
                     type="button"
                     disabled={!enabled || busy !== null}
                     onClick={() => triggerAction(action)}
-                    className="rounded border border-gray-300 px-4 py-2 text-sm font-medium disabled:cursor-not-allowed disabled:opacity-50"
+                    className="btn-ghost text-sm"
                   >
                     {ACTION_LABELS[action]}
                   </button>
@@ -199,25 +289,46 @@ export default function AdminRoomDashboardPage() {
             ) : null}
           </section>
 
-          <section className="flex flex-col gap-2">
-            <h2 className="text-lg font-medium">Participants</h2>
-            {players.length === 0 ? (
-              <EmptyState
-                title="No participants yet"
-                message="Players will appear here once they join the room."
+          {room.puzzle ? (
+            <section className="glass flex flex-col gap-3 px-6 py-4">
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <div>
+                  <h2 className="text-lg font-semibold text-blue-800">Crossword</h2>
+                  <p className="muted text-xs">
+                    Admin draft. Approving an answer lets players solve it automatically.
+                  </p>
+                </div>
+              </div>
+              <AdminCrossword
+                puzzle={room.puzzle}
+                solvedClues={solvedClues}
+                officialAnswers={room.officialAnswers}
+                onApproved={() => load(false)}
               />
-            ) : (
-              <ParticipantList players={players} />
-            )}
-          </section>
+            </section>
+          ) : null}
 
-          <section className="flex flex-col gap-2">
-            <h2 className="text-lg font-medium">Scoreboard</h2>
-            <Scoreboard roomId={roomId} />
-          </section>
+          <div className="grid gap-6 md:grid-cols-2">
+            <section className="glass flex flex-col gap-2 px-6 py-4">
+              <h2 className="text-lg font-semibold text-blue-800">Participants</h2>
+              {players.length === 0 ? (
+                <EmptyState
+                  title="No participants yet"
+                  message="Players will appear here once they join the room."
+                />
+              ) : (
+                <ParticipantList players={players} />
+              )}
+            </section>
 
-          <section className="flex flex-col gap-2">
-            <h2 className="text-lg font-medium">Pending Submissions</h2>
+            <section className="glass flex flex-col gap-2 px-6 py-4">
+              <h2 className="text-lg font-semibold text-blue-800">Scoreboard</h2>
+              <Scoreboard roomId={roomId} />
+            </section>
+          </div>
+
+          <section className="glass flex flex-col gap-2 px-6 py-4">
+            <h2 className="text-lg font-semibold text-blue-800">Pending Submissions</h2>
             {pendingSubmissions.length === 0 ? (
               <EmptyState
                 title="No pending submissions"
@@ -225,18 +336,47 @@ export default function AdminRoomDashboardPage() {
               />
             ) : (
               <ul className="flex flex-col gap-1" aria-label="Pending submissions">
-                {pendingSubmissions.map((submission, index) => (
-                  <li key={index} className="rounded border border-gray-200 px-3 py-2 text-sm">
-                    {submission.playerId ?? "Unknown player"} — clue {submission.clueId ?? "?"}
-                    {submission.answer ? `: ${submission.answer}` : ""}
-                  </li>
-                ))}
+                {pendingSubmissions.map((submission, index) => {
+                  const key = `${submission.clueId ?? "?"}:${submission.playerId ?? "unknown"}:${index}`;
+                  const playerName =
+                    players.find(
+                      (player) =>
+                        (player.playerId ?? player.id) === submission.playerId,
+                    )?.displayName ??
+                    submission.playerId ??
+                    "Unknown player";
+                  return (
+                    <li
+                      key={key}
+                      className="glass-soft flex flex-wrap items-center gap-3 px-3 py-2 text-sm text-blue-900"
+                    >
+                      <span className="min-w-0 flex-1">
+                        {playerName} - clue {submission.clueId ?? "?"}
+                        {submission.answer ? `: ${submission.answer}` : ""}
+                      </span>
+                      <button
+                        type="button"
+                        onClick={() => void approveSubmission(submission, index)}
+                        disabled={
+                          approving !== null ||
+                          !room.puzzleId ||
+                          !submission.clueId ||
+                          !submission.answer
+                        }
+                        className="btn-primary shrink-0 px-3 py-1 text-xs"
+                        aria-label={`Approve clue ${submission.clueId ?? "unknown"} for ${playerName}`}
+                      >
+                        {approving === key ? "Approving..." : "Approve"}
+                      </button>
+                    </li>
+                  );
+                })}
               </ul>
             )}
           </section>
 
-          <section className="flex flex-col gap-2">
-            <h2 className="text-lg font-medium">Scores</h2>
+          <section className="glass flex flex-col gap-2 px-6 py-4">
+            <h2 className="text-lg font-semibold text-blue-800">Scores</h2>
             {scores.length === 0 ? (
               <EmptyState
                 title="No scores yet"
@@ -245,7 +385,7 @@ export default function AdminRoomDashboardPage() {
             ) : (
               <ul className="flex flex-col gap-1" aria-label="Scores">
                 {scores.map((entry, index) => (
-                  <li key={index} className="rounded border border-gray-200 px-3 py-2 text-sm">
+                  <li key={index} className="glass-soft px-3 py-2 text-sm text-blue-900">
                     {entry.playerId ?? "Unknown player"}: {entry.score ?? 0}
                   </li>
                 ))}
