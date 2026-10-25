@@ -44,7 +44,35 @@ export default function RoomLobbyPage() {
   const [error, setError] = useState<string | null>(null);
   const [liveEvent, setLiveEvent] = useState<LiveRoomEvent | null>(null);
   const [showOriginal, setShowOriginal] = useState(false);
+  const [playerProgress, setPlayerProgress] = useState<{
+    solved: string[];
+    revealed: string[];
+  }>({ solved: [], revealed: [] });
   const solvedClueIdsRef = useRef<Set<string>>(new Set());
+
+  const loadPlayerProgress = useCallback(async () => {
+    try {
+      const base = process.env.NEXT_PUBLIC_BACKEND_URL ?? "http://localhost:8000";
+      const res = await fetch(`${base}/rooms/${roomId}/player-progress`, {
+        credentials: "include",
+      });
+      if (!res.ok) return;
+      const body = (await res.json()) as {
+        solved?: unknown;
+        revealed?: unknown;
+      };
+      setPlayerProgress({
+        solved: Array.isArray(body.solved)
+          ? body.solved.filter((value): value is string => typeof value === "string")
+          : [],
+        revealed: Array.isArray(body.revealed)
+          ? body.revealed.filter((value): value is string => typeof value === "string")
+          : [],
+      });
+    } catch {
+      // Progress is optional for visitors without a player session.
+    }
+  }, [roomId]);
 
   const handleLiveEvent = useCallback((event: MessageEvent) => {
     try {
@@ -77,6 +105,7 @@ export default function RoomLobbyPage() {
           firstSolverColor,
           points,
         });
+        void loadPlayerProgress();
       } else if (event.type === "ROOM_STATUS_CHANGED") {
         const status = data.status;
         if (typeof status !== "string") return;
@@ -86,7 +115,7 @@ export default function RoomLobbyPage() {
     } catch {
       // ignore malformed events
     }
-  }, []);
+  }, [loadPlayerProgress]);
 
   const handleStateFetched = useCallback((state: unknown) => {
     if (state && typeof state === "object") {
@@ -137,6 +166,10 @@ export default function RoomLobbyPage() {
   }, [roomId]);
 
   useEffect(() => {
+    void loadPlayerProgress();
+  }, [loadPlayerProgress]);
+
+  useEffect(() => {
     if (!showOriginal) return;
     const onKey = (event: globalThis.KeyboardEvent) => {
       if (event.key === "Escape") setShowOriginal(false);
@@ -145,8 +178,28 @@ export default function RoomLobbyPage() {
     return () => window.removeEventListener("keydown", onKey);
   }, [showOriginal]);
 
+  const handleClueSolved = useCallback((clueId: string) => {
+    setPlayerProgress((prev) =>
+      prev.solved.includes(clueId)
+        ? prev
+        : { ...prev, solved: [...prev.solved, clueId] },
+    );
+  }, []);
+
+  const handleClueRevealed = useCallback((clueId: string) => {
+    setPlayerProgress((prev) =>
+      prev.revealed.includes(clueId)
+        ? prev
+        : { ...prev, revealed: [...prev.revealed, clueId] },
+    );
+  }, []);
+
   const players = room?.players ?? room?.participants ?? [];
   const puzzle = room?.puzzle;
+  const displayClues =
+    puzzle?.displayClues && puzzle.displayClues.length > 0
+      ? puzzle.displayClues
+      : puzzle?.clues;
   const solvedCluesMap = (room?.solvedClues ?? []).reduce<Record<string, string>>(
     (acc, entry) => {
       acc[entry.clueId] = entry.firstSolverColor;
@@ -157,7 +210,8 @@ export default function RoomLobbyPage() {
   const statusLabel = room?.status
     ? (STATUS_LABELS[room.status] ?? room.status)
     : null;
-  const solvedClueIdSet = new Set(Object.keys(solvedCluesMap));
+  const playerSolvedClueIds = new Set(playerProgress.solved);
+  const playerRevealedClueIds = new Set(playerProgress.revealed);
 
   return (
     <main className="mx-auto flex min-h-screen w-full max-w-4xl flex-col gap-6 overflow-x-hidden p-6">
@@ -201,6 +255,8 @@ export default function RoomLobbyPage() {
                 roomStatus={room.status}
                 liveEvent={liveEvent}
                 initialSolvedClues={solvedCluesMap}
+                onClueSolved={handleClueSolved}
+                onClueRevealed={handleClueRevealed}
               />
             ) : (
               <EmptyState
@@ -212,7 +268,11 @@ export default function RoomLobbyPage() {
           {puzzle ? (
             <section className="glass flex flex-col gap-2 px-6 py-4">
               <h2 className="text-lg font-semibold text-blue-800">Clues</h2>
-              <ClueList clues={puzzle.clues} solvedClueIds={solvedClueIdSet} />
+              <ClueList
+                clues={displayClues ?? puzzle.clues}
+                playerSolvedClueIds={playerSolvedClueIds}
+                playerRevealedClueIds={playerRevealedClueIds}
+              />
             </section>
           ) : null}
           <div className="grid gap-6 md:grid-cols-2">

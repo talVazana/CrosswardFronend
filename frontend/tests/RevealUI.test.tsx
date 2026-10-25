@@ -135,6 +135,25 @@ describe("TASK-031 Reveal UI", () => {
     expect(screen.getByTestId("cell-0-4").textContent).toContain("A");
   });
 
+  it("notifies the room when the player reveals a clue", async () => {
+    const onClueRevealed = vi.fn();
+    vi.stubGlobal("fetch", okReveal("APPLE"));
+
+    render(
+      <CrosswordGrid
+        roomId="room-42"
+        puzzle={makePuzzle()}
+        onClueRevealed={onClueRevealed}
+      />,
+    );
+    fireEvent.click(screen.getByTestId("cell-0-4"));
+    fireEvent.click(screen.getByRole("button", { name: "Reveal Answer" }));
+
+    await waitFor(() => {
+      expect(onClueRevealed).toHaveBeenCalledWith("clue-1");
+    });
+  });
+
   it("Edge: fetch resolving 400 displays an error and does not disable the Submit button", async () => {
     const fetchMock = vi.fn().mockResolvedValue({
       status: 400,

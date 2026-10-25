@@ -27,6 +27,7 @@ export interface Puzzle {
   height: number;
   cells: Cell[];
   clues: Clue[];
+  displayClues?: Clue[];
 }
 
 type FeedbackState = "correct" | "incorrect" | "pending" | null;
@@ -51,6 +52,8 @@ interface CrosswordGridProps {
   roomStatus?: string;
   liveEvent?: LiveRoomEvent | null;
   initialSolvedClues?: Record<string, string>;
+  onClueSolved?: (clueId: string) => void;
+  onClueRevealed?: (clueId: string) => void;
 }
 
 export default function CrosswordGrid({
@@ -59,6 +62,8 @@ export default function CrosswordGrid({
   roomStatus,
   liveEvent,
   initialSolvedClues = {},
+  onClueSolved,
+  onClueRevealed,
 }: CrosswordGridProps) {
   const grid = build2DGrid(puzzle.cells, puzzle.width, puzzle.height);
   const { selectedCell, currentDirection, handleCellClick, setDirection } = useCrosswordSelection();
@@ -335,6 +340,7 @@ export default function CrosswordGrid({
             ? body.points
             : null,
         );
+        if (body.status === "correct") onClueSolved?.(activeClueId);
       } else {
         setError("Unexpected response from server");
       }
@@ -356,6 +362,7 @@ export default function CrosswordGrid({
     submitting,
     isRevealed,
     isPaused,
+    onClueSolved,
   ]);
 
   const reveal = useCallback(async () => {
@@ -400,12 +407,21 @@ export default function CrosswordGrid({
       });
       setRevealedClues((prev) => ({ ...prev, [activeClueId]: true }));
       setNextWriteIndex(Math.max(activeCells.length - 1, 0));
+      onClueRevealed?.(activeClueId);
     } catch {
       setError("Network error. Please try again.");
     } finally {
       setRevealing(false);
     }
-  }, [activeClueId, activeCells, revealing, isRevealed, roomId, isPaused]);
+  }, [
+    activeClueId,
+    activeCells,
+    revealing,
+    isRevealed,
+    roomId,
+    isPaused,
+    onClueRevealed,
+  ]);
 
   const solvedColorsForCell = (cell: Cell): string[] => {
     const clueIds = [

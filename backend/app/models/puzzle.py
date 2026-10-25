@@ -27,6 +27,7 @@ class Puzzle(BaseModel):
     height: int = Field(ge=1)
     cells: list[Cell] = Field(min_length=1)
     clues: list[Clue] = Field(min_length=1)
+    displayClues: Optional[list[Clue]] = None
 
     @model_validator(mode="after")
     def validate_cell_bounds(self):

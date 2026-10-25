@@ -1,4 +1,5 @@
 import json
+import re
 import secrets
 from pathlib import Path
 
@@ -7,7 +8,7 @@ from pydantic import BaseModel
 
 from ...adapters.parser_adapter import normalize_parser_response
 from ...models.answers import OfficialAnswers
-from ...models.puzzle import Puzzle
+from ...models.puzzle import Clue, Puzzle
 from ...models.room import Player, Room, RoomStatus
 from ...services import scoring_service
 from ...services.puzzle_utils import validate_puzzle_structure
@@ -23,12 +24,78 @@ REAL_PUZZLE_PATH = (
     / "parser-responses"
     / "real_puzzle.json"
 )
+REAL_CLUES_PATH = (
+    Path(__file__).resolve().parents[4]
+    / "fixtures"
+    / "a_clues.json"
+)
+
+
+def _answer_length(text: str) -> int:
+    groups = re.findall(r"\(([\d,\s]+)\)", text)
+    if not groups:
+        return 1
+    return sum(
+        int(part)
+        for part in groups[-1].split(",")
+        if part.strip().isdigit()
+    ) or 1
+
+
+def _load_real_display_clues() -> list[Clue]:
+    with REAL_CLUES_PATH.open("r", encoding="utf-8") as f:
+        raw = json.load(f)
+    clues: list[Clue] = []
+    for entry in raw:
+        number = entry["number"]
+        direction = entry["direction"]
+        prefix = "A" if direction == "across" else "D"
+        clues.append(
+            Clue(
+                clueId=f"{prefix}{number}",
+                number=number,
+                direction=direction,
+                text=entry["text"],
+                answerLength=_answer_length(entry["text"]),
+            )
+        )
+    return clues
 
 
 def _load_real_puzzle() -> Puzzle:
     with REAL_PUZZLE_PATH.open("r", encoding="utf-8") as f:
         raw = json.load(f)
-    return normalize_parser_response(raw)
+    puzzle = normalize_parser_response(raw)
+    display_clues = _load_real_display_clues()
+    text_by_clue = {clue.clueId: clue.text for clue in display_clues}
+    grid_ids = {clue.clueId for clue in puzzle.clues}
+    unmatched_display = [
+        clue for clue in display_clues if clue.clueId not in grid_ids
+    ]
+    merged_clues: list[Clue] = []
+    for clue in puzzle.clues:
+        if clue.clueId in text_by_clue:
+            merged_clues.append(
+                clue.model_copy(update={"text": text_by_clue[clue.clueId]})
+            )
+            continue
+        match = next(
+            (
+                candidate
+                for candidate in unmatched_display
+                if candidate.direction == clue.direction
+                and candidate.answerLength == clue.answerLength
+            ),
+            None,
+        )
+        if match is not None:
+            unmatched_display.remove(match)
+            merged_clues.append(clue.model_copy(update={"text": match.text}))
+        else:
+            merged_clues.append(clue)
+    return puzzle.model_copy(
+        update={"clues": merged_clues, "displayClues": display_clues}
+    )
 
 
 def _reset_room(room_id: str) -> None:

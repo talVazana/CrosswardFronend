@@ -11,6 +11,7 @@ from ...repositories.interfaces import SubmissionRepository
 from ...services import scoring_service
 from ...services.puzzle_utils import normalize_answer
 from . import admin as admin_module
+from . import drafts as drafts_module
 from . import events as events_module
 from . import rooms as rooms_module
 
@@ -84,6 +85,8 @@ def submit_answer(roomId: str, clueId: str, body: SubmissionRequest, request: Re
 
     if status != SubmissionStatus.correct:
         return {"status": status.value}
+
+    drafts_module.mark_clue_scored(roomId, player_id, clueId)
 
     player = rooms_module.player_repository.get(roomId, player_id)
     player_role = player.role if player else "player"

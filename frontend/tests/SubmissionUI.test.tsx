@@ -137,6 +137,48 @@ describe("TASK-025 submission UI", () => {
     }
   });
 
+  it("notifies the room when an approved clue is solved", async () => {
+    const onClueSolved = vi.fn();
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue(response(200, { status: "correct", points: 2 })),
+    );
+    render(
+      <CrosswordGrid
+        roomId="room-1"
+        puzzle={puzzle}
+        onClueSolved={onClueSolved}
+      />,
+    );
+    fireEvent.click(screen.getByTestId("cell-0-2"));
+    typeWord("cat");
+    fireEvent.click(getSubmit());
+
+    await screen.findByText("Correct!");
+    expect(onClueSolved).toHaveBeenCalledWith("A1");
+  });
+
+  it("does not mark a pending clue as solved for the player", async () => {
+    const onClueSolved = vi.fn();
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue(response(200, { status: "pending" })),
+    );
+    render(
+      <CrosswordGrid
+        roomId="room-1"
+        puzzle={puzzle}
+        onClueSolved={onClueSolved}
+      />,
+    );
+    fireEvent.click(screen.getByTestId("cell-0-2"));
+    typeWord("cat");
+    fireEvent.click(getSubmit());
+
+    await screen.findByText("Waiting for Admin");
+    expect(onClueSolved).not.toHaveBeenCalled();
+  });
+
   it("network failure: shows an error message and grid remains usable", async () => {
     const mockFetch = vi.fn().mockRejectedValue(new Error("network down"));
     vi.stubGlobal("fetch", mockFetch);

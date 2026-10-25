@@ -47,7 +47,11 @@ class RoomService:
                 ),
                 "width": room.puzzleSnapshot.width,
                 "height": room.puzzleSnapshot.height,
-                "clueCount": len(room.puzzleSnapshot.clues),
+                "clueCount": len(
+                    room.puzzleSnapshot.displayClues
+                    if room.puzzleSnapshot.displayClues
+                    else room.puzzleSnapshot.clues
+                ),
             }
             for room in rooms
         ]

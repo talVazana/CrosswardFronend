@@ -67,3 +67,22 @@ def get_drafts(roomId: str, request: Request):
         state.clueId: state.draft
         for state in player_clue_state_repository.list_by_player(roomId, player_id)
     }
+
+
+def mark_clue_scored(room_id: str, player_id: str, clue_id: str) -> None:
+    state = player_clue_state_repository.get(room_id, player_id, clue_id)
+    if state is None:
+        state = PlayerClueState(playerId=player_id, clueId=clue_id)
+    state.scored = True
+    player_clue_state_repository.save(state, room_id)
+
+
+@router.get("/rooms/{roomId}/player-progress")
+def get_player_progress(roomId: str, request: Request):
+    player_id = _resolve_player(request, roomId)
+    _validate_request_identity(request, roomId, player_id)
+    states = player_clue_state_repository.list_by_player(roomId, player_id)
+    return {
+        "solved": sorted(state.clueId for state in states if state.scored),
+        "revealed": sorted(state.clueId for state in states if state.revealed),
+    }

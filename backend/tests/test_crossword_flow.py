@@ -159,6 +159,13 @@ def public_state(client: TestClient) -> dict:
     return response.json()
 
 
+def progress(client: TestClient, token: str) -> dict:
+    as_player(client, token)
+    response = client.get(f"/rooms/{ROOM_ID}/player-progress")
+    assert response.status_code == 200, response.text
+    return response.json()
+
+
 def test_admin_grid_state_has_puzzle_answers_and_solved_colors_but_no_admin_player(env):
     client = env["client"]
     approve(client)
@@ -246,3 +253,46 @@ def test_revealed_player_earns_zero_and_later_solver_becomes_first_solver(env):
     assert public_state(client)["solvedClues"] == [
         {"clueId": CLUE_ID, "firstSolverColor": ASSIGNED_PLAYER_COLORS[1]}
     ]
+
+
+def test_player_progress_tracks_only_that_players_solved_and_revealed_clues(env):
+    client = env["client"]
+    approve(client)
+
+    assert submit(client, TOKEN_A).json()["status"] == "correct"
+    assert progress(client, TOKEN_A) == {"solved": [CLUE_ID], "revealed": []}
+    assert progress(client, TOKEN_B) == {"solved": [], "revealed": []}
+
+    as_player(client, TOKEN_B)
+    reveal = client.post(f"/rooms/{ROOM_ID}/clues/{CLUE_ID}/reveal")
+    assert reveal.status_code == 200, reveal.text
+
+    assert progress(client, TOKEN_B) == {"solved": [], "revealed": [CLUE_ID]}
+    assert progress(client, TOKEN_A) == {"solved": [CLUE_ID], "revealed": []}
+
+
+def test_pending_submission_counts_as_solved_only_after_admin_approval(env):
+    client = env["client"]
+
+    pending = submit(client, TOKEN_A)
+    assert pending.json() == {"status": "pending"}
+    assert progress(client, TOKEN_A) == {"solved": [], "revealed": []}
+
+    approve(client)
+
+    assert progress(client, TOKEN_A) == {"solved": [CLUE_ID], "revealed": []}
+
+
+def test_real_puzzle_seed_includes_hebrew_display_clues():
+    from app.api.routes.e2e import _load_real_puzzle
+
+    puzzle = _load_real_puzzle()
+
+    assert puzzle.displayClues is not None
+    assert len(puzzle.displayClues) == 24
+    assert all(clue.text.strip() for clue in puzzle.displayClues)
+    display_ids = {clue.clueId for clue in puzzle.displayClues}
+    assert display_ids >= {"A1", "D1", "A21", "D18"}
+    assert sum(clue.direction == "across" for clue in puzzle.displayClues) == 12
+    assert sum(clue.direction == "down" for clue in puzzle.displayClues) == 12
+    assert all(clue.text.strip() for clue in puzzle.clues)

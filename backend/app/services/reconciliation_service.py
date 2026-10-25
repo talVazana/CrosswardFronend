@@ -25,6 +25,9 @@ def reconcile_pending_submissions(room_id: str, clue_id: str, official_answer: s
             player_color = player.color if player else ""
 
             if normalize_answer(submission.answer) == official_answer:
+                drafts_module.mark_clue_scored(
+                    room_id, submission.playerId, clue_id
+                )
                 state = drafts_module.player_clue_state_repository.get(
                     room_id, submission.playerId, clue_id
                 )
