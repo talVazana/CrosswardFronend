@@ -233,7 +233,7 @@ export default function RoomLobbyPage() {
                 </div>
                 <div className="min-h-0 flex-1 overflow-auto">
                   <img
-                    src="/puzzle-source.jpg"
+                    src={`${process.env.NEXT_PUBLIC_BACKEND_URL ?? "http://localhost:8000"}/rooms/${roomId}/image`}
                     alt="Original published crossword page for this room"
                     className="mx-auto h-auto w-full rounded-lg"
                   />

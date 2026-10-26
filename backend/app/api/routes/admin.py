@@ -5,11 +5,12 @@ from fastapi import APIRouter, HTTPException, Request, Response
 from pydantic import BaseModel
 
 from ...models.answers import OfficialAnswers
-from ...models.room import Room, RoomStatus
+from ...models.room import Player, Room, RoomStatus
 from ...repositories.in_memory import InMemoryAnswerRepository
 from ...repositories.interfaces import AnswerRepository
 from ...services import firestore_publisher
 from ...services import scoring_service
+from ...services.puzzle_image_processor import PuzzleProcessingError, process_image
 from ...services.puzzle_utils import normalize_answer
 from ...services.reconciliation_service import reconcile_pending_submissions
 from . import events as events_module
@@ -120,6 +121,106 @@ def save_official_answer(puzzleId: str, clueId: str, body: AnswerRequest, reques
         if room.puzzleSnapshot.puzzleId == puzzleId:
             reconcile_pending_submissions(room.roomId, clueId, official_answer)
             firestore_publisher.publish_room(room.roomId)
+
+    return {"status": "ok"}
+
+
+@router.post("/admin/rooms", status_code=201)
+async def create_room(request: Request):
+    _resolve_admin(request)
+
+    title = request.query_params.get("title") or "New Room"
+    image_bytes = await request.body()
+    if not image_bytes:
+        raise HTTPException(status_code=400, detail="Image is required")
+
+    try:
+        puzzle = process_image(image_bytes)
+    except PuzzleProcessingError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+
+    from . import admin_puzzles as admin_puzzles_module
+
+    room_id = f"room-{secrets.token_hex(4)}"
+    puzzle_id = f"puzzle-{secrets.token_hex(8)}"
+    saved_puzzle = puzzle.model_copy(update={"puzzleId": puzzle_id})
+    saved_answers = OfficialAnswers(puzzleId=puzzle_id, answers={})
+
+    admin_puzzles_module.puzzle_repository.save_snapshot(saved_puzzle)
+    answer_repository.save(saved_answers)
+
+    admin_id = f"admin-{secrets.token_hex(8)}"
+    admin_player = Player(
+        roomId=room_id,
+        playerId=admin_id,
+        displayName="Admin",
+        color="#FF0000",
+        role="admin",
+    )
+    rooms_module.player_repository.add(admin_player)
+    admin_token = secrets.token_hex(16)
+    rooms_module._sessions[admin_token] = (room_id, admin_id)
+
+    room = Room(
+        roomId=room_id,
+        title=title,
+        status=RoomStatus.lobby,
+        puzzleSnapshot=saved_puzzle,
+        creatorId=admin_id,
+    )
+    rooms_module.room_repository.create(room)
+
+    firestore_publisher.publish_room_image(room_id, image_bytes)
+    firestore_publisher.publish_room(room_id)
+
+    return {"roomId": room_id, "puzzleId": puzzle_id, "status": room.status.value}
+
+
+@router.get("/admin/me")
+def admin_me(request: Request):
+    _resolve_admin(request)
+    return {"isAdmin": True}
+
+
+@router.delete("/admin/rooms/{roomId}")
+def delete_room(roomId: str, request: Request):
+    _resolve_admin(request)
+
+    rooms_module.room_repository._rooms.pop(roomId, None)
+    rooms_module.player_repository._players = {
+        k: v
+        for k, v in rooms_module.player_repository._players.items()
+        if k[0] != roomId
+    }
+    scoring_service._default_service._score_repository._events = {
+        k: v
+        for k, v in scoring_service._default_service._score_repository._events.items()
+        if v.roomId != roomId
+    }
+    scoring_service._default_service._public_clue_states = {
+        k: v
+        for k, v in scoring_service._default_service._public_clue_states.items()
+        if k[0] != roomId
+    }
+    rooms_module._sessions = {
+        k: v for k, v in rooms_module._sessions.items() if v[0] != roomId
+    }
+
+    from . import drafts as drafts_module
+    from . import submissions as submissions_module
+
+    submissions_module.submission_repository._submissions = {
+        k: v
+        for k, v in submissions_module.submission_repository._submissions.items()
+        if v.roomId != roomId
+    }
+    drafts_module.player_clue_state_repository.states = {
+        k: v
+        for k, v in drafts_module.player_clue_state_repository.states.items()
+        if k[0] != roomId
+    }
+
+    firestore_publisher.delete_room_docs(roomId)
 
     return {"status": "ok"}
 

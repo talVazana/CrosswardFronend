@@ -107,7 +107,9 @@ describe("original puzzle image", () => {
     const image = screen.getByAltText(
       "Original published crossword page for this room",
     ) as HTMLImageElement;
-    expect(image.getAttribute("src")).toBe("/puzzle-source.jpg");
+    expect(image.getAttribute("src")).toBe(
+      "http://localhost:8000/rooms/room-1/image",
+    );
 
     fireEvent.click(screen.getByRole("button", { name: "Close" }));
     expect(

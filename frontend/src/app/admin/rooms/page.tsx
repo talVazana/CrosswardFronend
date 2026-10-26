@@ -2,6 +2,7 @@
 
 import { FormEvent, useCallback, useEffect, useState } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import EmptyState from "@/components/ui/EmptyState";
 import ErrorMessage from "@/components/ui/ErrorMessage";
 import LoadingSpinner from "@/components/ui/LoadingSpinner";
@@ -83,6 +84,7 @@ function AdminRoomCard({ room }: { room: RoomSummary }) {
 }
 
 export default function AdminRoomsPage() {
+  const router = useRouter();
   const [rooms, setRooms] = useState<RoomSummary[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -90,6 +92,10 @@ export default function AdminRoomsPage() {
   const [password, setPassword] = useState("");
   const [signingIn, setSigningIn] = useState(false);
   const [signInError, setSignInError] = useState<string | null>(null);
+  const [roomTitle, setRoomTitle] = useState("");
+  const [imageFile, setImageFile] = useState<File | null>(null);
+  const [creating, setCreating] = useState(false);
+  const [createError, setCreateError] = useState<string | null>(null);
 
   const base = process.env.NEXT_PUBLIC_BACKEND_URL ?? "http://localhost:8000";
 
@@ -148,6 +154,48 @@ export default function AdminRoomsPage() {
       setSignInError("Network error. Please try again.");
     } finally {
       setSigningIn(false);
+    }
+  };
+
+  const createRoom = async (e: FormEvent<HTMLFormElement>) => {
+    e.preventDefault();
+    if (!imageFile) {
+      setCreateError("Choose a crossword image.");
+      return;
+    }
+    setCreating(true);
+    setCreateError(null);
+    try {
+      const bytes = await imageFile.arrayBuffer();
+      const title = roomTitle.trim() || "New Room";
+      const res = await fetch(
+        `${base}/admin/rooms?title=${encodeURIComponent(title)}`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/octet-stream" },
+          credentials: "include",
+          body: bytes,
+        },
+      );
+      if (!res.ok) {
+        const body = (await res.json().catch(() => ({}))) as {
+          detail?: string;
+        };
+        setCreateError(
+          typeof body.detail === "string"
+            ? body.detail
+            : `Failed to create room (status ${res.status})`,
+        );
+        return;
+      }
+      const body = (await res.json()) as { roomId?: string };
+      if (body.roomId) {
+        router.push(`/admin/rooms/${body.roomId}`);
+      }
+    } catch {
+      setCreateError("Network error. Please try again.");
+    } finally {
+      setCreating(false);
     }
   };
 
@@ -222,6 +270,52 @@ export default function AdminRoomsPage() {
         />
       ) : (
         <>
+          <section className="glass flex flex-col gap-3 px-6 py-4">
+            <div>
+              <h2 className="text-lg font-semibold text-blue-900">Create room</h2>
+              <p className="muted text-xs">
+                Upload a crossword image. The backend parses the grid and extracts
+                the clues with Google Gemini.
+              </p>
+            </div>
+            <form
+              onSubmit={createRoom}
+              className="flex flex-col gap-3 sm:flex-row sm:items-end"
+            >
+              <label className="flex flex-1 flex-col gap-1 text-start">
+                <span className="text-sm font-medium">Room title</span>
+                <input
+                  type="text"
+                  value={roomTitle}
+                  onChange={(e) => setRoomTitle(e.target.value)}
+                  className="input"
+                  placeholder="Room title"
+                />
+              </label>
+              <label className="flex flex-1 flex-col gap-1 text-start">
+                <span className="text-sm font-medium">Crossword image</span>
+                <input
+                  type="file"
+                  accept="image/*"
+                  onChange={(e) => setImageFile(e.target.files?.[0] ?? null)}
+                  className="input"
+                />
+              </label>
+              <button
+                type="submit"
+                disabled={creating || !imageFile}
+                className="btn-primary sm:self-end"
+              >
+                {creating ? "Creating..." : "Create room"}
+              </button>
+            </form>
+            {createError ? (
+              <p role="alert" className="text-sm font-medium text-rose-700">
+                {createError}
+              </p>
+            ) : null}
+          </section>
+
           <section className="glass flex flex-wrap items-center justify-between gap-4 px-6 py-5">
             <div className="flex flex-wrap gap-6">
               <div>

@@ -101,3 +101,12 @@ def get_room_state(roomId: str):
     for player in state.get("players", []):
         player["playerId"] = player["id"]
     return state
+
+
+@router.get("/rooms/{roomId}/image")
+def get_room_image(roomId: str):
+    result = firestore_publisher.get_room_image(roomId)
+    if result is None:
+        raise HTTPException(status_code=404, detail="Image not found")
+    data, content_type = result
+    return Response(content=data, media_type=content_type)

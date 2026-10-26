@@ -1,3 +1,8 @@
 fastapi
 uvicorn
 pytest
+opencv-python-headless
+numpy
+scipy
+google-genai
+Pillow

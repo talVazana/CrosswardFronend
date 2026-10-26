@@ -24,7 +24,17 @@ function backendTone(status: "checking" | "connected" | "offline"): string {
   return "border-blue-300/70 bg-blue-100/70 text-blue-800";
 }
 
-function RoomCard({ room }: { room: RoomSummary }) {
+function RoomCard({
+  room,
+  canRemove,
+  removing,
+  onRemove,
+}: {
+  room: RoomSummary;
+  canRemove: boolean;
+  removing: boolean;
+  onRemove: (roomId: string) => void;
+}) {
   const status = room.status ?? "draft";
   const label = roomStatusLabel(status);
   const active = isRoomActive(status);
@@ -79,6 +89,16 @@ function RoomCard({ room }: { room: RoomSummary }) {
         <Link href={`/rooms/${room.roomId}`} className="btn-ghost text-sm">
           View
         </Link>
+        {canRemove ? (
+          <button
+            type="button"
+            onClick={() => onRemove(room.roomId)}
+            disabled={removing}
+            className="rounded border border-rose-300 bg-white px-3 py-1 text-sm font-medium text-rose-700 hover:bg-rose-100 disabled:opacity-50"
+          >
+            Remove
+          </button>
+        ) : null}
       </div>
     </article>
   );
@@ -93,6 +113,8 @@ export default function Page() {
   const [rooms, setRooms] = useState<RoomSummary[]>([]);
   const [roomsLoading, setRoomsLoading] = useState(true);
   const [roomsError, setRoomsError] = useState<string | null>(null);
+  const [isAdmin, setIsAdmin] = useState(false);
+  const [removingRoomId, setRemovingRoomId] = useState<string | null>(null);
 
   const base = process.env.NEXT_PUBLIC_BACKEND_URL ?? "http://localhost:8000";
 
@@ -117,6 +139,30 @@ export default function Page() {
       cancelled = true;
     };
   }, [base]);
+
+  useEffect(() => {
+    fetch(`${base}/admin/me`, { credentials: "include" })
+      .then((res) => {
+        if (res.ok) setIsAdmin(true);
+      })
+      .catch(() => {});
+  }, [base]);
+
+  const handleRemoveRoom = async (targetRoomId: string) => {
+    const confirmed = window.confirm(`Remove room ${targetRoomId}?`);
+    if (!confirmed) return;
+    setRemovingRoomId(targetRoomId);
+    try {
+      await fetch(`${base}/admin/rooms/${targetRoomId}`, {
+        method: "DELETE",
+        credentials: "include",
+      });
+    } catch {
+      // ignore; the gallery refreshes via Firestore once the room is gone
+    } finally {
+      setRemovingRoomId(null);
+    }
+  };
 
   useEffect(() => {
     const unsubscribe = subscribeRooms(
@@ -244,7 +290,13 @@ export default function Page() {
         ) : (
           <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
             {rooms.map((room) => (
-              <RoomCard key={room.roomId} room={room} />
+              <RoomCard
+                key={room.roomId}
+                room={room}
+                canRemove={isAdmin}
+                removing={removingRoomId === room.roomId}
+                onRemove={handleRemoveRoom}
+              />
             ))}
           </div>
         )}

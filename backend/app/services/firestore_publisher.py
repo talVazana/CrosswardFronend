@@ -15,6 +15,7 @@ Implementation notes:
 
 from __future__ import annotations
 
+import base64
 import json
 import os
 import threading
@@ -31,6 +32,11 @@ _BASE_URL = (
 )
 
 
+def _publishing_enabled() -> bool:
+    """Disable Firestore publishing while the test suite runs."""
+    return not os.environ.get("PYTEST_CURRENT_TEST")
+
+
 def _firestore_value(value: object) -> dict:
     """Convert a plain Python value to a Firestore REST ``Value`` object."""
     if value is None:
@@ -41,6 +47,8 @@ def _firestore_value(value: object) -> dict:
         return {"integerValue": str(value)}
     if isinstance(value, float):
         return {"doubleValue": value}
+    if isinstance(value, (bytes, bytearray)):
+        return {"bytesValue": base64.b64encode(bytes(value)).decode("ascii")}
     if isinstance(value, str):
         return {"stringValue": value}
     if isinstance(value, list):
@@ -131,6 +139,8 @@ def build_room_payload(room_id: str) -> dict | None:
 
 def publish_room(room_id: str) -> None:
     """Publish one room's public state to Firestore, non-blocking."""
+    if not _publishing_enabled():
+        return
     payload = build_room_payload(room_id)
     if payload is None:
         return
@@ -144,7 +154,63 @@ def publish_room(room_id: str) -> None:
 
 def publish_all_rooms() -> None:
     """Publish every room currently held in memory."""
+    if not _publishing_enabled():
+        return
     from ..api.routes import rooms as rooms_module
 
     for room_id in list(rooms_module.room_repository._rooms.keys()):
         publish_room(room_id)
+
+
+def publish_room_image(
+    room_id: str, image_bytes: bytes, content_type: str = "image/jpeg"
+) -> None:
+    """Store the source crossword image as a Firestore blob (best-effort)."""
+    if not _publishing_enabled():
+        return
+    _write_document(
+        "room_images",
+        room_id,
+        {"data": image_bytes, "contentType": content_type},
+    )
+
+
+def get_room_image(room_id: str) -> tuple[bytes, str] | None:
+    """Read the source crossword image blob for a room."""
+    url = f"{_BASE_URL}/room_images/{room_id}"
+    request = urllib.request.Request(
+        url,
+        method="GET",
+        headers={"Authorization": "Bearer owner"},
+    )
+    try:
+        with urllib.request.urlopen(request, timeout=5) as response:
+            document = json.loads(response.read().decode("utf-8"))
+    except (urllib.error.URLError, OSError, ValueError):
+        return None
+
+    fields = document.get("fields", {})
+    data_field = fields.get("data", {}).get("bytesValue")
+    content_type = fields.get("contentType", {}).get("stringValue", "image/jpeg")
+    if not data_field:
+        return None
+    return base64.b64decode(data_field), content_type
+
+
+def _delete_document(collection: str, document_id: str) -> None:
+    url = f"{_BASE_URL}/{collection}/{document_id}"
+    request = urllib.request.Request(
+        url,
+        method="DELETE",
+        headers={"Authorization": "Bearer owner"},
+    )
+    try:
+        urllib.request.urlopen(request, timeout=3)
+    except (urllib.error.URLError, OSError):
+        pass
+
+
+def delete_room_docs(room_id: str) -> None:
+    """Remove a room's Firestore snapshot and image blob (best-effort)."""
+    _delete_document("rooms", room_id)
+    _delete_document("room_images", room_id)
