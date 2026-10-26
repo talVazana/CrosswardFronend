@@ -4,6 +4,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { useParams } from "next/navigation";
 import AdminCrossword from "@/components/AdminCrossword";
+import ClueList from "@/components/ClueList";
 import ParticipantList, { Participant } from "@/components/ParticipantList";
 import Scoreboard from "@/components/Scoreboard";
 import type { Puzzle } from "@/components/CrosswordGrid";
@@ -223,6 +224,12 @@ export default function AdminRoomDashboardPage() {
     },
     {},
   );
+  const puzzle = room?.puzzle;
+  const displayClues =
+    puzzle?.displayClues && puzzle.displayClues.length > 0
+      ? puzzle.displayClues
+      : puzzle?.clues ?? [];
+  const solvedClueIds = new Set(Object.keys(solvedClues));
 
   return (
     <main className="mx-auto flex min-h-screen w-full max-w-3xl flex-col gap-6 p-6">
@@ -315,6 +322,13 @@ export default function AdminRoomDashboardPage() {
                 officialAnswers={room.officialAnswers}
                 onApproved={() => load(false)}
               />
+            </section>
+          ) : null}
+
+          {displayClues.length > 0 ? (
+            <section className="glass flex flex-col gap-2 px-6 py-4">
+              <h2 className="text-lg font-semibold text-blue-800">Clues</h2>
+              <ClueList clues={displayClues} solvedClueIds={solvedClueIds} />
             </section>
           ) : null}
 

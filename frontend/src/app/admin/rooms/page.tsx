@@ -206,9 +206,6 @@ export default function AdminRoomsPage() {
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
-          <Link href="/admin/puzzles/editor" className="btn-ghost text-sm">
-            Puzzle editor
-          </Link>
           <Link href="/" className="btn-ghost text-sm">
             Back to site
           </Link>
