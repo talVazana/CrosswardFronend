@@ -1,12 +1,26 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { cleanup, fireEvent, render, screen } from "@testing-library/react";
+import { act, cleanup, fireEvent, render, screen } from "@testing-library/react";
 
 vi.mock("next/navigation", () => ({
   useParams: () => ({ roomId: "room-1" }),
 }));
 
-vi.mock("../src/hooks/useRoomLiveUpdates", () => ({
-  useRoomLiveUpdates: () => ({ connectionState: "connected" }),
+const harness = vi.hoisted(() => ({
+  onNext: null as null | ((room: unknown) => void),
+  onError: null as null | ((error: Error) => void),
+}));
+
+vi.mock("../src/lib/roomsStore", () => ({
+  subscribeRoom: (
+    _roomId: string,
+    onNext: (room: unknown) => void,
+    onError?: (error: Error) => void,
+  ) => {
+    harness.onNext = onNext;
+    harness.onError = onError ?? null;
+    return () => {};
+  },
+  subscribeRooms: () => () => {},
 }));
 
 import RoomLobbyPage from "../src/app/rooms/[roomId]/page";
@@ -52,10 +66,18 @@ const room = {
   },
 };
 
+function emitRoom(value: unknown) {
+  act(() => {
+    harness.onNext?.(value);
+  });
+}
+
 afterEach(() => {
   cleanup();
   vi.unstubAllGlobals();
   vi.restoreAllMocks();
+  harness.onNext = null;
+  harness.onError = null;
 });
 
 describe("original puzzle image", () => {
@@ -64,13 +86,15 @@ describe("original puzzle image", () => {
       "fetch",
       vi.fn(async (input: RequestInfo | URL) => {
         const url = String(input);
-        if (url.endsWith("/rooms/room-1/state")) return jsonResponse(room);
-        if (url.endsWith("/rooms/room-1/scores")) return jsonResponse([]);
+        if (url.endsWith("/rooms/room-1/player-progress")) {
+          return jsonResponse({ solved: [], revealed: [] });
+        }
         throw new Error(`Unexpected fetch: ${url}`);
       }),
     );
 
     render(<RoomLobbyPage />);
+    emitRoom(room);
     await screen.findByText("Image Test Room");
 
     fireEvent.click(
@@ -96,13 +120,15 @@ describe("original puzzle image", () => {
       "fetch",
       vi.fn(async (input: RequestInfo | URL) => {
         const url = String(input);
-        if (url.endsWith("/rooms/room-1/state")) return jsonResponse(room);
-        if (url.endsWith("/rooms/room-1/scores")) return jsonResponse([]);
+        if (url.endsWith("/rooms/room-1/player-progress")) {
+          return jsonResponse({ solved: [], revealed: [] });
+        }
         throw new Error(`Unexpected fetch: ${url}`);
       }),
     );
 
     render(<RoomLobbyPage />);
+    emitRoom(room);
     await screen.findByText("Image Test Room");
 
     fireEvent.click(

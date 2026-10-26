@@ -8,6 +8,7 @@ from ...models.gameplay import Submission, SubmissionStatus, utc_now
 from ...models.room import RoomStatus
 from ...repositories.in_memory import InMemorySubmissionRepository
 from ...repositories.interfaces import SubmissionRepository
+from ...services import firestore_publisher
 from ...services import scoring_service
 from ...services.puzzle_utils import normalize_answer
 from . import admin as admin_module
@@ -106,6 +107,7 @@ def submit_answer(roomId: str, clueId: str, body: SubmissionRequest, request: Re
                 player_color if points == 2 else scoring_service._default_service.get_public_clue_state(roomId, clueId).firstSolverColor or ""
             )
             events_module.broadcast_clue_solved(roomId, clueId, first_solver_color, points)
+            firestore_publisher.publish_room(roomId)
             return {"status": "correct", "points": points}
         submission_repository.update_status(
             submission.submissionId, SubmissionStatus.correct, points

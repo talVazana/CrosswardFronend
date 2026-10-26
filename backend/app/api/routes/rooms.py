@@ -7,6 +7,7 @@ from pydantic import BaseModel, Field
 from ...models.room import ASSIGNED_PLAYER_COLORS, Player
 from ...repositories.in_memory import InMemoryPlayerRepository, InMemoryRoomRepository
 from ...repositories.interfaces import PlayerRepository, RoomRepository
+from ...services import firestore_publisher
 from ...services.room_service import RoomService
 
 router = APIRouter()
@@ -82,6 +83,7 @@ def join_room(roomId: str, body: JoinRequest, response: Response, session_token:
             secure=False,
             samesite="lax",
         )
+    firestore_publisher.publish_room(roomId)
     return {"playerId": player.playerId, "color": player.color}
 
 

@@ -1,27 +1,29 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { render, screen, fireEvent, cleanup, waitFor, act } from "@testing-library/react";
 
-const harness = vi.hoisted(() => ({
-  options: null as null | {
-    onEvent?: (event: MessageEvent) => void;
-    onStateFetched?: (state: unknown) => void;
-  },
-}));
-
 vi.mock("next/navigation", () => ({
   useParams: () => ({ roomId: "room-1" }),
 }));
 
-vi.mock("../src/hooks/useRoomLiveUpdates", () => ({
-  useRoomLiveUpdates: (options: typeof harness.options) => {
-    harness.options = options;
-    return { connectionState: "connected" };
+const harness = vi.hoisted(() => ({
+  onNext: null as null | ((room: unknown) => void),
+  onError: null as null | ((error: Error) => void),
+}));
+
+vi.mock("../src/lib/roomsStore", () => ({
+  subscribeRoom: (
+    _roomId: string,
+    onNext: (room: unknown) => void,
+    onError?: (error: Error) => void,
+  ) => {
+    harness.onNext = onNext;
+    harness.onError = onError ?? null;
+    return () => {};
   },
+  subscribeRooms: () => () => {},
 }));
 
 import RoomLobbyPage from "../src/app/rooms/[roomId]/page";
-
-const ROOM_ID = "room-1";
 
 const puzzle = {
   puzzleId: "live-puzzle",
@@ -55,25 +57,26 @@ function jsonResponse(body: unknown, status = 200): Response {
   } as unknown as Response;
 }
 
-function makeEvent(type: string, payload: unknown): MessageEvent {
+function baseRoom() {
   return {
-    type,
-    data: typeof payload === "string" ? payload : JSON.stringify(payload),
-  } as MessageEvent;
+    roomId: "room-1",
+    title: "Test Room",
+    status: "active",
+    players: [],
+    solvedClues: [],
+    puzzle,
+  };
 }
 
-function emit(type: string, payload: unknown) {
+function emit(room: unknown) {
   act(() => {
-    harness.options?.onEvent?.(makeEvent(type, payload));
+    harness.onNext?.(room);
   });
 }
 
-function DummyBoard() {
-  return <RoomLobbyPage />;
-}
-
 async function renderBoard() {
-  render(<DummyBoard />);
+  render(<RoomLobbyPage />);
+  emit(baseRoom());
   await screen.findByText("Test Room");
 }
 
@@ -100,19 +103,14 @@ async function selectAndType() {
 }
 
 beforeEach(() => {
-  harness.options = null;
   vi.stubGlobal(
     "fetch",
-    vi.fn(async () =>
-      jsonResponse({
-        roomId: ROOM_ID,
-        title: "Test Room",
-        status: "active",
-        puzzle,
-        solvedClues: [],
-        players: [],
-      }),
-    ),
+    vi.fn(async (input: RequestInfo | URL) => {
+      if (String(input).endsWith("/player-progress")) {
+        return jsonResponse({ solved: [], revealed: [] });
+      }
+      throw new Error(`Unexpected fetch: ${String(input)}`);
+    }),
   );
 });
 
@@ -120,17 +118,18 @@ afterEach(() => {
   cleanup();
   vi.unstubAllGlobals();
   vi.restoreAllMocks();
+  harness.onNext = null;
+  harness.onError = null;
 });
 
-describe("TASK-040 frontend live event idempotency", () => {
-  it("Given an active board with clue A1 unsolved, when CLUE_SOLVED with clueId A1 firstSolverColor #FF0000 arrives, then A1 is marked solved and the color is applied", async () => {
+describe("Firestore room state updates", () => {
+  it("marks clue A1 solved and applies its color when solvedClues updates", async () => {
     await renderBoard();
     expect(cellShadow("cell-0-0")).toBe("");
 
-    emit("CLUE_SOLVED", {
-      clueId: "A1",
-      firstSolverColor: "#FF0000",
-      points: 10,
+    emit({
+      ...baseRoom(),
+      solvedClues: [{ clueId: "A1", firstSolverColor: "#FF0000" }],
     });
 
     await waitFor(() => {
@@ -143,15 +142,14 @@ describe("TASK-040 frontend live event idempotency", () => {
     ).toMatch(/rgba\(255,\s*0,\s*0/i);
   });
 
-  it("Given the board where A1 is already solved, when the exact same CLUE_SOLVED event arrives again, then the state remains completely unchanged with no errors or duplicates", async () => {
+  it("applies an identical duplicate snapshot without changing state or raising errors", async () => {
     await renderBoard();
-    const event = {
-      clueId: "A1",
-      firstSolverColor: "#FF0000",
-      points: 10,
+    const solved = {
+      ...baseRoom(),
+      solvedClues: [{ clueId: "A1", firstSolverColor: "#FF0000" }],
     };
 
-    emit("CLUE_SOLVED", event);
+    emit(solved);
     await waitFor(() => {
       expect(cellShadow("cell-0-0")).toMatch(/rgba\(255,\s*0,\s*0/i);
     });
@@ -162,8 +160,8 @@ describe("TASK-040 frontend live event idempotency", () => {
       c02: cellShadow("cell-0-2"),
     };
 
-    emit("CLUE_SOLVED", event);
-    emit("CLUE_SOLVED", event);
+    emit(solved);
+    emit(solved);
 
     expect(cellShadow("cell-0-0")).toBe(before.c00);
     expect(cellShadow("cell-0-1")).toBe(before.c01);
@@ -172,11 +170,11 @@ describe("TASK-040 frontend live event idempotency", () => {
     expect(screen.queryByRole("alert")).toBeNull();
   });
 
-  it("Given the player typed HELLO into the grid for A1, when ROOM_STATUS_CHANGED sets the room to paused, then the letters remain intact and Submit is disabled", async () => {
+  it("keeps typed letters and disables Submit when the room pauses", async () => {
     await renderBoard();
     await selectAndType();
 
-    emit("ROOM_STATUS_CHANGED", { status: "paused" });
+    emit({ ...baseRoom(), status: "paused" });
 
     await waitFor(() => {
       expect(cellText("cell-0-4")).toContain("H");
@@ -187,26 +185,13 @@ describe("TASK-040 frontend live event idempotency", () => {
     ).toBe(true);
   });
 
-  it("Edge: an unknown event type arriving through the stream is gracefully ignored without throwing exceptions", async () => {
-    await renderBoard();
-
-    expect(() => {
-      emit("SOMETHING_UNKNOWN", { foo: "bar" });
-      emit("SOMETHING_UNKNOWN", "this is not json");
-    }).not.toThrow();
-
-    expect(screen.getByRole("application", { name: "Crossword grid" })).toBeTruthy();
-    expect(screen.queryByRole("alert")).toBeNull();
-  });
-
-  it("Acceptance: public CLUE_SOLVED events never touch the player's local unsubmitted letters", async () => {
+  it("never touches local unsubmitted letters when solvedClues updates", async () => {
     await renderBoard();
     await selectAndType();
 
-    emit("CLUE_SOLVED", {
-      clueId: "A1",
-      firstSolverColor: "#00FF00",
-      points: 25,
+    emit({
+      ...baseRoom(),
+      solvedClues: [{ clueId: "A1", firstSolverColor: "#00FF00" }],
     });
 
     await waitFor(() => {
@@ -217,30 +202,5 @@ describe("TASK-040 frontend live event idempotency", () => {
     ).toMatch(/rgba\(0,\s*255,\s*0/i);
     expect(cellText("cell-0-4")).toContain("H");
     expect(cellText("cell-0-0")).toContain("O");
-  });
-
-  it("Acceptance: out-of-order events (status change before clue solved, malformed and duplicate payloads) do not crash the board", async () => {
-    await renderBoard();
-
-    emit("ROOM_STATUS_CHANGED", { status: "paused" });
-    emit("CLUE_SOLVED", { clueId: "A1" });
-    emit("CLUE_SOLVED", {
-      clueId: "A1",
-      firstSolverColor: "#FF0000",
-      points: 10,
-    });
-    emit("ROOM_STATUS_CHANGED", { status: "active" });
-    emit("CLUE_SOLVED", {
-      clueId: "A1",
-      firstSolverColor: "#FF0000",
-      points: 10,
-    });
-    emit("ROOM_STATUS_CHANGED", "garbage");
-
-    expect(screen.getByRole("application", { name: "Crossword grid" })).toBeTruthy();
-    expect(screen.queryByRole("alert")).toBeNull();
-    await waitFor(() => {
-      expect(cellShadow("cell-0-0")).toMatch(/rgba\(255,\s*0,\s*0/i);
-    });
   });
 });

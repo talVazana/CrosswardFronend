@@ -1,7 +1,5 @@
 "use client";
 
-import { useEffect, useState } from "react";
-
 export interface ScoreEntry {
   playerId?: string;
   id?: string;
@@ -11,51 +9,14 @@ export interface ScoreEntry {
 }
 
 interface ScoreboardProps {
-  roomId: string;
+  scores?: ScoreEntry[];
+  loading?: boolean;
 }
 
-export default function Scoreboard({ roomId }: ScoreboardProps) {
-  const [scores, setScores] = useState<ScoreEntry[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-
-  useEffect(() => {
-    let cancelled = false;
-
-    async function fetchScores() {
-      try {
-        const base = process.env.NEXT_PUBLIC_BACKEND_URL ?? "http://localhost:8000";
-        const res = await fetch(`${base}/rooms/${roomId}/scores`, {
-          credentials: "include",
-        });
-        if (cancelled) return;
-        if (!res.ok) {
-          setError(`Failed to load scores (status ${res.status})`);
-          return;
-        }
-        const body = (await res.json()) as ScoreEntry[];
-        if (cancelled) return;
-        setScores(Array.isArray(body) ? body : []);
-        setError(null);
-      } catch {
-        if (!cancelled) {
-          setError("Network error. Please try again.");
-        }
-      }
-    }
-
-    setLoading(true);
-    fetchScores().finally(() => {
-      if (!cancelled) setLoading(false);
-    });
-    const interval = setInterval(fetchScores, 2000);
-
-    return () => {
-      cancelled = true;
-      clearInterval(interval);
-    };
-  }, [roomId]);
-
+export default function Scoreboard({
+  scores,
+  loading = false,
+}: ScoreboardProps) {
   if (loading) {
     return (
       <p role="status" className="muted">
@@ -64,15 +25,7 @@ export default function Scoreboard({ roomId }: ScoreboardProps) {
     );
   }
 
-  if (error) {
-    return (
-      <p role="alert" className="text-sm font-medium text-blue-700">
-        {error}
-      </p>
-    );
-  }
-
-  if (scores.length === 0) {
+  if (!scores || scores.length === 0) {
     return <p className="muted text-sm">No scores yet.</p>;
   }
 
@@ -90,8 +43,13 @@ export default function Scoreboard({ roomId }: ScoreboardProps) {
               className="inline-block h-4 w-4 rounded-full border border-blue-900/20 opacity-70"
               style={{ backgroundColor: entry.color }}
             />
-            <span className="text-sm font-medium text-blue-900">{entry.displayName}</span>
-            <span data-testid="score-value" className="ml-auto text-sm font-semibold text-blue-700">
+            <span className="text-sm font-medium text-blue-900">
+              {entry.displayName}
+            </span>
+            <span
+              data-testid="score-value"
+              className="ml-auto text-sm font-semibold text-blue-700"
+            >
               {entry.totalPoints}
             </span>
           </li>

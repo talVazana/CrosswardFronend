@@ -46,6 +46,8 @@ export interface RoomStatusChangedEvent {
 
 export type LiveRoomEvent = ClueSolvedEvent | RoomStatusChangedEvent;
 
+const EMPTY_SOLVED_CLUES: Record<string, string> = {};
+
 interface CrosswordGridProps {
   roomId: string;
   puzzle: Puzzle;
@@ -61,7 +63,7 @@ export default function CrosswordGrid({
   puzzle,
   roomStatus,
   liveEvent,
-  initialSolvedClues = {},
+  initialSolvedClues = EMPTY_SOLVED_CLUES,
   onClueSolved,
   onClueRevealed,
 }: CrosswordGridProps) {
@@ -140,6 +142,10 @@ export default function CrosswordGrid({
       // ignore malformed events; letters are never touched by live events
     }
   }, [liveEvent]);
+
+  useEffect(() => {
+    setSolvedClues(initialSolvedClues);
+  }, [initialSolvedClues]);
 
   useEffect(() => {
     setFeedback(null);

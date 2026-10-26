@@ -1,13 +1,27 @@
 import { describe, it, expect, vi, afterEach } from "vitest";
-import { render, screen, fireEvent, cleanup, waitFor } from "@testing-library/react";
+import { act, render, screen, fireEvent, cleanup, waitFor } from "@testing-library/react";
 
 vi.mock("next/navigation", () => ({
   useParams: () => ({ roomId: "room-1" }),
   useRouter: () => ({ push: vi.fn(), replace: vi.fn() }),
 }));
 
-vi.mock("../src/hooks/useRoomLiveUpdates", () => ({
-  useRoomLiveUpdates: () => ({ connectionState: "connected" }),
+const harness = vi.hoisted(() => ({
+  onNext: null as null | ((room: unknown) => void),
+  onError: null as null | ((error: Error) => void),
+}));
+
+vi.mock("../src/lib/roomsStore", () => ({
+  subscribeRoom: (
+    _roomId: string,
+    onNext: (room: unknown) => void,
+    onError?: (error: Error) => void,
+  ) => {
+    harness.onNext = onNext;
+    harness.onError = onError ?? null;
+    return () => {};
+  },
+  subscribeRooms: () => () => {},
 }));
 
 import AdminRoomDashboardPage from "../src/app/admin/rooms/[roomId]/page";
@@ -38,10 +52,24 @@ function emptyAdminRoom() {
   };
 }
 
+function emitRoom(value: unknown) {
+  act(() => {
+    harness.onNext?.(value);
+  });
+}
+
+function emitError(error: Error) {
+  act(() => {
+    harness.onError?.(error);
+  });
+}
+
 afterEach(() => {
   cleanup();
   vi.unstubAllGlobals();
   vi.restoreAllMocks();
+  harness.onNext = null;
+  harness.onError = null;
 });
 
 describe("TASK-044 loading, error and empty UI states", () => {
@@ -75,12 +103,15 @@ describe("TASK-044 loading, error and empty UI states", () => {
     vi.stubGlobal(
       "fetch",
       vi.fn(async (input: RequestInfo | URL) => {
-        if (scoresRoute(input)) return jsonResponse([]);
+        if (String(input).endsWith("/player-progress")) {
+          return jsonResponse({ solved: [], revealed: [] });
+        }
         throw new TypeError("Failed to fetch");
       }),
     );
 
     render(<RoomLobbyPage />);
+    emitError(new TypeError("Failed to fetch"));
 
     const alert = await screen.findByRole("alert");
     expect(alert.textContent).toMatch(/Network error|Unable to connect to server/i);
@@ -107,7 +138,9 @@ describe("TASK-044 loading, error and empty UI states", () => {
     vi.stubGlobal(
       "fetch",
       vi.fn(async (input: RequestInfo | URL) => {
-        if (scoresRoute(input)) return jsonResponse([]);
+        if (String(input).endsWith("/player-progress")) {
+          return jsonResponse({ solved: [], revealed: [] });
+        }
         return jsonResponse({
           roomId: "room-1",
           title: "Empty Room",
@@ -118,6 +151,12 @@ describe("TASK-044 loading, error and empty UI states", () => {
     );
 
     render(<RoomLobbyPage />);
+    emitRoom({
+      roomId: "room-1",
+      title: "Empty Room",
+      status: "lobby",
+      players: [],
+    });
 
     await screen.findByText("Empty Room");
     expect(screen.getAllByTestId("empty-state").length).toBeGreaterThan(0);

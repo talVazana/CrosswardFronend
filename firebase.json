@@ -4,6 +4,12 @@
     "indexes": "firestore.indexes.json"
   },
   "emulators": {
+    "apphosting": {
+      "host": "127.0.0.1",
+      "port": 5002,
+      "rootDirectory": "frontend",
+      "startCommand": "npm run dev"
+    },
     "firestore": {
       "host": "127.0.0.1",
       "port": 8080

@@ -8,6 +8,7 @@ from ...models.answers import OfficialAnswers
 from ...models.room import Room, RoomStatus
 from ...repositories.in_memory import InMemoryAnswerRepository
 from ...repositories.interfaces import AnswerRepository
+from ...services import firestore_publisher
 from ...services import scoring_service
 from ...services.puzzle_utils import normalize_answer
 from ...services.reconciliation_service import reconcile_pending_submissions
@@ -118,6 +119,7 @@ def save_official_answer(puzzleId: str, clueId: str, body: AnswerRequest, reques
     for room in rooms:
         if room.puzzleSnapshot.puzzleId == puzzleId:
             reconcile_pending_submissions(room.roomId, clueId, official_answer)
+            firestore_publisher.publish_room(room.roomId)
 
     return {"status": "ok"}
 
@@ -133,6 +135,7 @@ def _admin_transition(roomId: str, action: str, request: Request) -> Room:
     room.status = target
     rooms_module.room_repository.update(room)
     events_module.broadcast_room_status_changed(roomId, room.status.value)
+    firestore_publisher.publish_room(roomId)
     return room
 
 

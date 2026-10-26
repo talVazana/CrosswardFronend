@@ -46,18 +46,41 @@ Stop both processes:
 ./scripts/stop-dev.ps1
 ```
 
-## Firestore emulator (local development)
+## Firebase emulators (local development)
 
-Start the Firebase Firestore emulator in its own terminal:
+Keep the FastAPI backend running locally (by default on port `8001`), then start
+the Firestore and App Hosting emulators in their own terminal:
 
 ```powershell
 ./scripts/start-emulators.ps1
 ```
 
+- App Hosting website: `http://localhost:5002`
 - Firestore endpoint: `http://127.0.0.1:8080`
 - Emulator UI: `http://127.0.0.1:4000`
 - Project ID: `demo-crossword-arena`
 - Local data and logs live under `.firebase/`, which is intentionally ignored by Git.
+
+The App Hosting emulator runs the Next.js development server from `frontend/`
+with `PORT=5002`. It uses the backend URL from `frontend/.env.local`. Firebase
+Authentication, including Google sign-in, is not configured yet.
+
+The normal frontend at `http://localhost:3000` is still available when running
+`./scripts/start-dev.ps1`.
+
+### Data flow
+
+The frontend reads shared, public state from Firestore:
+
+- Room list, room state, participants, and scoreboard are read with
+  `onSnapshot` from `src/lib/roomsStore.ts` (Firestore emulator).
+- Writes stay on FastAPI: join, submit, reveal, and admin actions still call
+  the backend REST endpoints.
+- The backend publishes a `rooms/{roomId}` snapshot to Firestore after every
+  state change (`backend/app/services/firestore_publisher.py`).
+
+Firestore is a read mirror of the in-memory FastAPI state. The backend remains
+the source of truth for scoring and game rules.
 
 ## Testing
 

@@ -1,11 +1,12 @@
 "use client";
 
-import { FormEvent, useCallback, useEffect, useState } from "react";
+import { FormEvent, useEffect, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import EmptyState from "@/components/ui/EmptyState";
 import ErrorMessage from "@/components/ui/ErrorMessage";
 import LoadingSpinner from "@/components/ui/LoadingSpinner";
+import { subscribeRooms } from "@/lib/roomsStore";
 import {
   RoomSummary,
   isRoomActive,
@@ -117,27 +118,20 @@ export default function Page() {
     };
   }, [base]);
 
-  const loadRooms = useCallback(async () => {
-    setRoomsLoading(true);
-    setRoomsError(null);
-    try {
-      const res = await fetch(`${base}/rooms`, { credentials: "include" });
-      if (!res.ok) {
-        setRoomsError(`Failed to load rooms (status ${res.status})`);
-        return;
-      }
-      const body = await res.json();
-      setRooms(Array.isArray(body) ? (body as RoomSummary[]) : []);
-    } catch {
-      setRoomsError("Network error while loading rooms.");
-    } finally {
-      setRoomsLoading(false);
-    }
-  }, [base]);
-
   useEffect(() => {
-    void loadRooms();
-  }, [loadRooms]);
+    const unsubscribe = subscribeRooms(
+      (next) => {
+        setRooms(next);
+        setRoomsLoading(false);
+        setRoomsError(null);
+      },
+      () => {
+        setRoomsLoading(false);
+        setRoomsError("Failed to load rooms from Firestore.");
+      },
+    );
+    return unsubscribe;
+  }, []);
 
   const submit = (e: FormEvent<HTMLFormElement>) => {
     e.preventDefault();
@@ -228,21 +222,11 @@ export default function Page() {
       </section>
 
       <section className="flex flex-col gap-4">
-        <div className="flex flex-wrap items-end justify-between gap-3">
-          <div>
-            <h2 className="text-2xl font-semibold text-blue-900">Room gallery</h2>
-            <p className="muted text-sm">
-              Every room on this server, with its current status.
-            </p>
-          </div>
-          <button
-            type="button"
-            onClick={() => void loadRooms()}
-            disabled={roomsLoading}
-            className="btn-ghost text-sm"
-          >
-            Refresh
-          </button>
+        <div>
+          <h2 className="text-2xl font-semibold text-blue-900">Room gallery</h2>
+          <p className="muted text-sm">
+            Every room on this server, updating live.
+          </p>
         </div>
 
         {roomsLoading ? (
@@ -251,7 +235,6 @@ export default function Page() {
           <ErrorMessage
             title="Could not load rooms"
             message={roomsError}
-            onRetry={() => void loadRooms()}
           />
         ) : rooms.length === 0 ? (
           <EmptyState

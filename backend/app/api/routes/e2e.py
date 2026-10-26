@@ -10,6 +10,7 @@ from ...adapters.parser_adapter import normalize_parser_response
 from ...models.answers import OfficialAnswers
 from ...models.puzzle import Clue, Puzzle
 from ...models.room import Player, Room, RoomStatus
+from ...services import firestore_publisher
 from ...services import scoring_service
 from ...services.puzzle_utils import validate_puzzle_structure
 from . import admin_puzzles as admin_puzzles_module
@@ -179,6 +180,7 @@ def seed_room(body: E2ESeedRequest):
         creatorId=admin_id,
     )
     rooms_module.room_repository.create(room)
+    firestore_publisher.publish_room(body.roomId)
     return {
         "roomId": room.roomId,
         "puzzleId": puzzle_id,

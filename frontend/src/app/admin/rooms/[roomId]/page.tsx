@@ -205,6 +205,16 @@ export default function AdminRoomDashboardPage() {
   const players = room?.players ?? room?.participants ?? [];
   const pendingSubmissions = room?.pendingSubmissions ?? room?.pending ?? [];
   const scores = room?.scores ?? [];
+  const publicScores = (room?.players ?? room?.participants ?? []).map((player) => {
+    const id = player.playerId ?? player.id;
+    const match = (room?.scores ?? []).find((entry) => entry.playerId === id);
+    return {
+      playerId: id,
+      displayName: player.displayName,
+      color: player.color,
+      totalPoints: match?.score ?? 0,
+    };
+  });
   const actions = allowedActions(status);
   const solvedClues = (room?.solvedClues ?? []).reduce<Record<string, string>>(
     (acc, entry) => {
@@ -323,7 +333,7 @@ export default function AdminRoomDashboardPage() {
 
             <section className="glass flex flex-col gap-2 px-6 py-4">
               <h2 className="text-lg font-semibold text-blue-800">Scoreboard</h2>
-              <Scoreboard roomId={roomId} />
+              <Scoreboard scores={publicScores} />
             </section>
           </div>
 

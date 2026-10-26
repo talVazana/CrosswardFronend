@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, afterEach, beforeEach } from "vitest";
-import { render, screen, cleanup, waitFor } from "@testing-library/react";
+import { act, render, screen, cleanup } from "@testing-library/react";
 
 const { mockUseParams } = vi.hoisted(() => ({
   mockUseParams: vi.fn(() => ({ roomId: "room-1" })),
@@ -10,6 +10,24 @@ vi.mock("next/navigation", () => ({
   useRouter: () => ({ push: vi.fn(), replace: vi.fn() }),
 }));
 
+const harness = vi.hoisted(() => ({
+  onNext: null as null | ((room: unknown) => void),
+  onError: null as null | ((error: Error) => void),
+}));
+
+vi.mock("../src/lib/roomsStore", () => ({
+  subscribeRoom: (
+    _roomId: string,
+    onNext: (room: unknown) => void,
+    onError?: (error: Error) => void,
+  ) => {
+    harness.onNext = onNext;
+    harness.onError = onError ?? null;
+    return () => {};
+  },
+  subscribeRooms: () => () => {},
+}));
+
 import Scoreboard from "../src/components/Scoreboard";
 import RoomLobbyPage from "../src/app/rooms/[roomId]/page";
 import AdminRoomDashboardPage from "../src/app/admin/rooms/[roomId]/page";
@@ -18,13 +36,13 @@ const SCORES = [
   { playerId: "p1", displayName: "Dana", color: "#FF0000", totalPoints: 2 },
 ];
 
-const ROOM = {
+const ADMIN_ROOM = {
   roomId: "room-1",
   title: "Room One",
   status: "lobby",
-  participants: [{ playerId: "p9", displayName: "Alice", color: "#00FF00" }],
+  participants: [{ playerId: "p1", displayName: "Dana", color: "#FF0000" }],
   pendingSubmissions: [],
-  scores: [],
+  scores: [{ playerId: "p1", score: 2 }],
 };
 
 function response(status: number, body: unknown) {
@@ -35,105 +53,74 @@ function response(status: number, body: unknown) {
   } as unknown as Response;
 }
 
-function isScoreUrl(input: RequestInfo | URL) {
-  return String(input).endsWith("/rooms/room-1/scores");
-}
-
-function fetchReturningScores() {
-  return vi.fn(async (input: RequestInfo | URL) => {
-    if (isScoreUrl(input)) return response(200, SCORES);
-    if (String(input).includes("/admin/rooms/room-1")) return response(200, ROOM);
-    return response(200, ROOM);
-  });
-}
-
 function isRed(backgroundColor: string) {
   const normalized = backgroundColor.replace(/\s/g, "").toLowerCase();
   return normalized === "rgb(255,0,0)" || normalized === "#ff0000";
 }
 
-class MockEventSource {
-  onopen: (() => void) | null = null;
-  onmessage: ((event: MessageEvent) => void) | null = null;
-  onerror: (() => void) | null = null;
-  addEventListener() {}
-  removeEventListener() {}
-  close() {}
+function emitRoom(value: unknown) {
+  act(() => {
+    harness.onNext?.(value);
+  });
 }
 
 beforeEach(() => {
   mockUseParams.mockReturnValue({ roomId: "room-1" });
-  vi.stubGlobal("EventSource", MockEventSource);
 });
 
 afterEach(() => {
   cleanup();
   vi.unstubAllGlobals();
   vi.restoreAllMocks();
+  harness.onNext = null;
+  harness.onError = null;
 });
 
 describe("TASK-048 Scoreboard UI", () => {
-  it("renders displayName, color dot with player color, and totalPoints from API", async () => {
-    vi.stubGlobal("fetch", fetchReturningScores());
-    render(<Scoreboard roomId="room-1" />);
+  it("renders displayName, color dot with player color, and totalPoints", () => {
+    render(<Scoreboard scores={SCORES} />);
 
-    expect(await screen.findByText("Dana")).toBeTruthy();
+    expect(screen.getByText("Dana")).toBeTruthy();
     expect(screen.getByText("2")).toBeTruthy();
     const dot = screen.getByTestId("score-color");
     expect(isRed(dot.style.backgroundColor)).toBe(true);
   });
 
-  it("shows Loading... while fetch is pending", () => {
-    vi.stubGlobal("fetch", vi.fn(() => new Promise<Response>(() => {})));
-    render(<Scoreboard roomId="room-1" />);
+  it("shows Loading... while the loading prop is set", () => {
+    render(<Scoreboard loading />);
     expect(screen.getByText("Loading...")).toBeTruthy();
   });
 
-  it("shows a fallback message and does not throw when fetch rejects", async () => {
-    vi.stubGlobal(
-      "fetch",
-      vi.fn(() => Promise.reject(new Error("network down")))
-    );
-    render(<Scoreboard roomId="room-1" />);
-
-    const alert = await screen.findByRole("alert");
-    expect(alert.textContent && alert.textContent.length > 0).toBe(true);
-    expect(screen.queryByText("Loading...")).toBeNull();
+  it("shows No scores yet. when scores are empty", () => {
+    render(<Scoreboard scores={[]} />);
+    expect(screen.getByText("No scores yet.")).toBeTruthy();
   });
 
-  it("shows No scores yet. when the API returns an empty array", async () => {
-    vi.stubGlobal(
-      "fetch",
-      vi.fn(async () => response(200, []))
-    );
-    render(<Scoreboard roomId="room-1" />);
-    expect(await screen.findByText("No scores yet.")).toBeTruthy();
-  });
-
-  it("edge: fetch URL ends with /rooms/<roomId>/scores, uses backend base URL and credentials include", async () => {
-    const mockFetch = fetchReturningScores();
-    vi.stubGlobal("fetch", mockFetch);
-    render(<Scoreboard roomId="room-1" />);
-    await screen.findByText("Dana");
-
-    await waitFor(() => {
-      const scoreCall = mockFetch.mock.calls.find(([input]) =>
-        isScoreUrl(input)
-      );
-      expect(scoreCall).toBeTruthy();
-    });
-    const scoreCall = mockFetch.mock.calls.find(([input]) =>
-      isScoreUrl(input)
-    ) as [RequestInfo | URL, RequestInit];
-    expect(String(scoreCall[0])).toBe(
-      "http://localhost:8000/rooms/room-1/scores"
-    );
-    expect(scoreCall[1]?.credentials).toBe("include");
+  it("shows No scores yet. when scores are not provided", () => {
+    render(<Scoreboard />);
+    expect(screen.getByText("No scores yet.")).toBeTruthy();
   });
 
   it("room lobby page renders the scoreboard alongside the participant list", async () => {
-    vi.stubGlobal("fetch", fetchReturningScores());
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (input: RequestInfo | URL) => {
+        if (String(input).endsWith("/player-progress")) {
+          return response(200, { solved: [], revealed: [] });
+        }
+        throw new Error(`Unexpected fetch: ${String(input)}`);
+      }),
+    );
+
     render(<RoomLobbyPage />);
+    emitRoom({
+      roomId: "room-1",
+      title: "Room One",
+      status: "lobby",
+      players: [{ id: "p9", displayName: "Alice", color: "#00FF00" }],
+      solvedClues: [],
+      scores: SCORES,
+    });
 
     expect(await screen.findByText("Dana")).toBeTruthy();
     expect(await screen.findByText("Alice")).toBeTruthy();
@@ -142,11 +129,21 @@ describe("TASK-048 Scoreboard UI", () => {
   });
 
   it("admin dashboard page renders the scoreboard for its room", async () => {
-    vi.stubGlobal("fetch", fetchReturningScores());
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (input: RequestInfo | URL) => {
+        if (String(input).includes("/admin/rooms/room-1")) {
+          return response(200, ADMIN_ROOM);
+        }
+        throw new Error(`Unexpected fetch: ${String(input)}`);
+      }),
+    );
+
     render(<AdminRoomDashboardPage />);
 
     expect(await screen.findByText("Room One")).toBeTruthy();
-    expect(await screen.findByText("Dana")).toBeTruthy();
-    expect(screen.getByRole("list", { name: "Scoreboard" })).toBeTruthy();
+    const scoreboard = await screen.findByRole("list", { name: "Scoreboard" });
+    expect(scoreboard.textContent).toContain("Dana");
+    expect(scoreboard.textContent).toContain("2");
   });
 });

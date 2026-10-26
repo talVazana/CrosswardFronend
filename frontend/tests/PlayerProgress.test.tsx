@@ -1,12 +1,26 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { cleanup, render, screen } from "@testing-library/react";
+import { act, cleanup, render, screen } from "@testing-library/react";
 
 vi.mock("next/navigation", () => ({
   useParams: () => ({ roomId: "room-1" }),
 }));
 
-vi.mock("../src/hooks/useRoomLiveUpdates", () => ({
-  useRoomLiveUpdates: () => ({ connectionState: "connected" }),
+const harness = vi.hoisted(() => ({
+  onNext: null as null | ((room: unknown) => void),
+  onError: null as null | ((error: Error) => void),
+}));
+
+vi.mock("../src/lib/roomsStore", () => ({
+  subscribeRoom: (
+    _roomId: string,
+    onNext: (room: unknown) => void,
+    onError?: (error: Error) => void,
+  ) => {
+    harness.onNext = onNext;
+    harness.onError = onError ?? null;
+    return () => {};
+  },
+  subscribeRooms: () => () => {},
 }));
 
 import RoomLobbyPage from "../src/app/rooms/[roomId]/page";
@@ -63,10 +77,18 @@ const room = {
   },
 };
 
+function emitRoom(value: unknown) {
+  act(() => {
+    harness.onNext?.(value);
+  });
+}
+
 afterEach(() => {
   cleanup();
   vi.unstubAllGlobals();
   vi.restoreAllMocks();
+  harness.onNext = null;
+  harness.onError = null;
 });
 
 describe("player clue progress", () => {
@@ -109,8 +131,6 @@ describe("player clue progress", () => {
       "fetch",
       vi.fn(async (input: RequestInfo | URL) => {
         const url = String(input);
-        if (url.endsWith("/rooms/room-1/state")) return jsonResponse(room);
-        if (url.endsWith("/rooms/room-1/scores")) return jsonResponse([]);
         if (url.endsWith("/rooms/room-1/player-progress")) {
           return jsonResponse({ solved: ["A1"], revealed: ["D1"] });
         }
@@ -119,6 +139,7 @@ describe("player clue progress", () => {
     );
 
     render(<RoomLobbyPage />);
+    emitRoom(room);
     await screen.findByText("Progress Room");
 
     const solved = (await screen.findByRole("checkbox", {

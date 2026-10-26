@@ -1,30 +1,16 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { useParams } from "next/navigation";
-import CrosswordGrid, {
-  LiveRoomEvent,
-  Puzzle,
-} from "@/components/CrosswordGrid";
+import CrosswordGrid from "@/components/CrosswordGrid";
 import ClueList from "@/components/ClueList";
 import ParticipantList, { Participant } from "@/components/ParticipantList";
 import Scoreboard from "@/components/Scoreboard";
 import LoadingSpinner from "@/components/ui/LoadingSpinner";
 import ErrorMessage from "@/components/ui/ErrorMessage";
 import EmptyState from "@/components/ui/EmptyState";
-import { useRoomLiveUpdates } from "@/hooks/useRoomLiveUpdates";
-
-interface RoomState {
-  roomId?: string;
-  id?: string;
-  title?: string;
-  status?: string;
-  players?: Participant[];
-  participants?: Participant[];
-  puzzle?: Puzzle;
-  solvedClues?: { clueId: string; firstSolverColor: string }[];
-}
+import { subscribeRoom, type RoomDoc } from "@/lib/roomsStore";
 
 const STATUS_LABELS: Record<string, string> = {
   draft: "Draft",
@@ -39,16 +25,14 @@ export default function RoomLobbyPage() {
   const params = useParams<{ roomId: string }>();
   const roomId = params.roomId;
 
-  const [room, setRoom] = useState<RoomState | null>(null);
+  const [room, setRoom] = useState<RoomDoc | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [liveEvent, setLiveEvent] = useState<LiveRoomEvent | null>(null);
   const [showOriginal, setShowOriginal] = useState(false);
   const [playerProgress, setPlayerProgress] = useState<{
     solved: string[];
     revealed: string[];
   }>({ solved: [], revealed: [] });
-  const solvedClueIdsRef = useRef<Set<string>>(new Set());
 
   const loadPlayerProgress = useCallback(async () => {
     try {
@@ -74,95 +58,29 @@ export default function RoomLobbyPage() {
     }
   }, [roomId]);
 
-  const handleLiveEvent = useCallback((event: MessageEvent) => {
-    try {
-      const data = JSON.parse(event.data as string) as Record<string, unknown>;
-      if (event.type === "CLUE_SOLVED") {
-        const clueId = data.clueId;
-        const firstSolverColor = data.firstSolverColor;
-        const points = data.points;
-        if (
-          typeof clueId !== "string" ||
-          typeof firstSolverColor !== "string" ||
-          typeof points !== "number"
-        ) {
-          return;
-        }
-        if (solvedClueIdsRef.current.has(clueId)) return;
-        solvedClueIdsRef.current.add(clueId);
-        setRoom((prev) => {
-          if (!prev) return prev;
-          const existing = prev.solvedClues ?? [];
-          if (existing.some((entry) => entry.clueId === clueId)) return prev;
-          return {
-            ...prev,
-            solvedClues: [...existing, { clueId, firstSolverColor }],
-          };
-        });
-        setLiveEvent({
-          type: "CLUE_SOLVED",
-          clueId,
-          firstSolverColor,
-          points,
-        });
-        void loadPlayerProgress();
-      } else if (event.type === "ROOM_STATUS_CHANGED") {
-        const status = data.status;
-        if (typeof status !== "string") return;
-        setRoom((prev) => (prev ? { ...prev, status } : { status }));
-        setLiveEvent({ type: "ROOM_STATUS_CHANGED", status });
-      }
-    } catch {
-      // ignore malformed events
-    }
-  }, [loadPlayerProgress]);
-
-  const handleStateFetched = useCallback((state: unknown) => {
-    if (state && typeof state === "object") {
-      setRoom((prev) => ({ ...(prev ?? {}), ...(state as RoomState) }));
-    }
-  }, []);
-
-  useRoomLiveUpdates({ roomId, onEvent: handleLiveEvent, onStateFetched: handleStateFetched });
-
   useEffect(() => {
-    let cancelled = false;
+    setLoading(true);
+    setError(null);
 
-    async function load() {
-      setLoading(true);
-      setError(null);
-      try {
-        const base = process.env.NEXT_PUBLIC_BACKEND_URL ?? "http://localhost:8000";
-        const res = await fetch(`${base}/rooms/${roomId}/state`, {
-          credentials: "include",
-        });
-        if (cancelled) return;
-        if (res.status === 404) {
+    const unsubscribe = subscribeRoom(
+      roomId,
+      (doc) => {
+        setLoading(false);
+        if (!doc) {
+          setRoom(null);
           setError("Room not found");
           return;
         }
-        if (!res.ok) {
-          setError(`Failed to load room (status ${res.status})`);
-          return;
-        }
-        const body = (await res.json()) as RoomState;
-        if (cancelled) return;
-        setRoom(body);
-      } catch {
-        if (!cancelled) {
-          setError("Network error. Please try again.");
-        }
-      } finally {
-        if (!cancelled) {
-          setLoading(false);
-        }
-      }
-    }
+        setRoom(doc);
+        setError(null);
+      },
+      () => {
+        setLoading(false);
+        setError("Network error. Please try again.");
+      },
+    );
 
-    load();
-    return () => {
-      cancelled = true;
-    };
+    return unsubscribe;
   }, [roomId]);
 
   useEffect(() => {
@@ -194,19 +112,19 @@ export default function RoomLobbyPage() {
     );
   }, []);
 
-  const players = room?.players ?? room?.participants ?? [];
+  const players: Participant[] = room?.players ?? [];
   const puzzle = room?.puzzle;
   const displayClues =
     puzzle?.displayClues && puzzle.displayClues.length > 0
       ? puzzle.displayClues
       : puzzle?.clues;
-  const solvedCluesMap = (room?.solvedClues ?? []).reduce<Record<string, string>>(
-    (acc, entry) => {
-      acc[entry.clueId] = entry.firstSolverColor;
-      return acc;
-    },
-    {},
-  );
+  const solvedCluesMap = useMemo(() => {
+    const map: Record<string, string> = {};
+    for (const entry of room?.solvedClues ?? []) {
+      map[entry.clueId] = entry.firstSolverColor;
+    }
+    return map;
+  }, [room?.solvedClues]);
   const statusLabel = room?.status
     ? (STATUS_LABELS[room.status] ?? room.status)
     : null;
@@ -253,7 +171,6 @@ export default function RoomLobbyPage() {
                 roomId={roomId}
                 puzzle={puzzle}
                 roomStatus={room.status}
-                liveEvent={liveEvent}
                 initialSolvedClues={solvedCluesMap}
                 onClueSolved={handleClueSolved}
                 onClueRevealed={handleClueRevealed}
@@ -289,7 +206,7 @@ export default function RoomLobbyPage() {
             </section>
             <section className="glass flex flex-col gap-2 px-6 py-4">
               <h2 className="text-lg font-semibold text-blue-800">Scoreboard</h2>
-              <Scoreboard roomId={roomId} />
+              <Scoreboard scores={room.scores} loading={loading} />
             </section>
           </div>
           {showOriginal ? (

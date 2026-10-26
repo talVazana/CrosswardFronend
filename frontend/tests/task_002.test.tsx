@@ -7,6 +7,11 @@ vi.mock("next/navigation", () => ({
   useRouter: () => ({ push: vi.fn() }),
 }));
 
+vi.mock("../src/lib/roomsStore", () => ({
+  subscribeRooms: () => () => {},
+  subscribeRoom: () => () => {},
+}));
+
 import Page from "../src/app/page";
 
 afterEach(() => {
