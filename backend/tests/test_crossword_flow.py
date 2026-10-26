@@ -259,7 +259,28 @@ def test_admin_can_reject_pending_submission_without_scoring(env):
     }
     assert client.get(f"/admin/rooms/{ROOM_ID}").json()["pendingSubmissions"] == []
     assert public_state(client)["solvedClues"] == []
-    assert progress(client, TOKEN_A) == {"solved": [], "revealed": [], "answers": {}}
+    assert progress(client, TOKEN_A) == {
+        "solved": [],
+        "revealed": [],
+        "answers": {},
+        "rejected": [
+            {"clueId": CLUE_ID, "submissionId": submission_id},
+        ],
+    }
+
+
+def test_rejection_clears_after_player_resubmits(env):
+    client = env["client"]
+    assert submit(client, TOKEN_A).json() == {"status": "pending"}
+
+    as_admin(client)
+    pending = client.get(f"/admin/rooms/{ROOM_ID}").json()["pendingSubmissions"]
+    url = f"/admin/rooms/{ROOM_ID}/submissions/{pending[0]['submissionId']}/reject"
+    assert client.post(url).status_code == 200
+    assert [item["clueId"] for item in progress(client, TOKEN_A)["rejected"]] == [CLUE_ID]
+
+    assert submit(client, TOKEN_A, "APPLE").json() == {"status": "pending"}
+    assert progress(client, TOKEN_A)["rejected"] == []
 
 
 def test_rejecting_same_submission_twice_returns_conflict(env):
@@ -313,8 +334,14 @@ def test_player_progress_tracks_only_that_players_solved_and_revealed_clues(env)
         "solved": [CLUE_ID],
         "revealed": [],
         "answers": {CLUE_ID: ANSWER},
+        "rejected": [],
     }
-    assert progress(client, TOKEN_B) == {"solved": [], "revealed": [], "answers": {}}
+    assert progress(client, TOKEN_B) == {
+        "solved": [],
+        "revealed": [],
+        "answers": {},
+        "rejected": [],
+    }
 
     as_player(client, TOKEN_B)
     reveal = client.post(f"/rooms/{ROOM_ID}/clues/{CLUE_ID}/reveal")
@@ -324,11 +351,13 @@ def test_player_progress_tracks_only_that_players_solved_and_revealed_clues(env)
         "solved": [],
         "revealed": [CLUE_ID],
         "answers": {CLUE_ID: ANSWER},
+        "rejected": [],
     }
     assert progress(client, TOKEN_A) == {
         "solved": [CLUE_ID],
         "revealed": [],
         "answers": {CLUE_ID: ANSWER},
+        "rejected": [],
     }
 
 
@@ -337,7 +366,12 @@ def test_pending_submission_counts_as_solved_only_after_admin_approval(env):
 
     pending = submit(client, TOKEN_A)
     assert pending.json() == {"status": "pending"}
-    assert progress(client, TOKEN_A) == {"solved": [], "revealed": [], "answers": {}}
+    assert progress(client, TOKEN_A) == {
+        "solved": [],
+        "revealed": [],
+        "answers": {},
+        "rejected": [],
+    }
 
     approve(client)
 
@@ -345,6 +379,7 @@ def test_pending_submission_counts_as_solved_only_after_admin_approval(env):
         "solved": [CLUE_ID],
         "revealed": [],
         "answers": {CLUE_ID: ANSWER},
+        "rejected": [],
     }
 
 

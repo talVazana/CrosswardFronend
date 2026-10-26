@@ -226,6 +226,9 @@ def delete_room_docs(room_id: str, puzzle_id: str | None = None) -> None:
     _delete_document("room_images", room_id)
     if puzzle_id is not None:
         _delete_document("puzzle_answers", puzzle_id)
+    for document in read_collection("submissions"):
+        if document.get("roomId") == room_id:
+            _delete_document("submissions", document["_id"])
 
 
 def publish_answers(puzzle_id: str, answers: dict[str, str]) -> None:
@@ -240,6 +243,25 @@ def publish_session(token: str, room_id: str, player_id: str) -> None:
     if not _publishing_enabled():
         return
     _write_document("sessions", token, {"roomId": room_id, "playerId": player_id})
+
+
+def publish_submission(submission) -> None:
+    """Persist a player submission so pending review and rejections survive a restart."""
+    if not _publishing_enabled():
+        return
+    _write_document(
+        "submissions",
+        submission.submissionId,
+        {
+            "roomId": submission.roomId,
+            "playerId": submission.playerId,
+            "clueId": submission.clueId,
+            "answer": submission.answer,
+            "status": submission.status.value,
+            "pointsAwarded": submission.pointsAwarded,
+            "serverTimestamp": submission.serverTimestamp.isoformat(),
+        },
+    )
 
 
 def delete_session(token: str) -> None:

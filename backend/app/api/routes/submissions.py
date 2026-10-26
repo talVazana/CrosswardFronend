@@ -83,6 +83,7 @@ def submit_answer(roomId: str, clueId: str, body: SubmissionRequest, request: Re
         pointsAwarded=0,
     )
     submission_repository.add(submission)
+    firestore_publisher.publish_submission(submission)
 
     if status != SubmissionStatus.correct:
         return {"status": status.value}
@@ -105,6 +106,7 @@ def submit_answer(roomId: str, clueId: str, body: SubmissionRequest, request: Re
             submission_repository.update_status(
                 submission.submissionId, SubmissionStatus.correct, points
             )
+            firestore_publisher.publish_submission(submission)
             first_solver_color = (
                 player_color if points == 2 else scoring_service._default_service.get_public_clue_state(roomId, clueId).firstSolverColor or ""
             )
@@ -114,4 +116,5 @@ def submit_answer(roomId: str, clueId: str, body: SubmissionRequest, request: Re
         submission_repository.update_status(
             submission.submissionId, SubmissionStatus.correct, points
         )
+        firestore_publisher.publish_submission(submission)
     return {"status": "correct", "points": points}

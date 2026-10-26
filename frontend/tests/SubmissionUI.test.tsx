@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, afterEach } from "vitest";
-import { render, screen, fireEvent, cleanup } from "@testing-library/react";
+import { render, screen, fireEvent, cleanup, act } from "@testing-library/react";
 import CrosswordGrid, { Puzzle } from "../src/components/CrosswordGrid";
 
 const puzzle: Puzzle = {
@@ -46,6 +46,7 @@ afterEach(() => {
   cleanup();
   vi.unstubAllGlobals();
   vi.restoreAllMocks();
+  window.localStorage.clear();
 });
 
 describe("TASK-025 submission UI", () => {
@@ -111,6 +112,46 @@ describe("TASK-025 submission UI", () => {
     typeWord("cat");
     fireEvent.click(getSubmit());
     expect(await screen.findByText("Waiting for Admin")).toBeTruthy();
+  });
+
+  it("rejected answer shows a message that hides after a few seconds", () => {
+    vi.useFakeTimers();
+    try {
+      render(
+        <CrosswordGrid
+          roomId="room-1"
+          puzzle={puzzle}
+          playerRejected={[{ clueId: "A1", submissionId: "sub-1" }]}
+        />,
+      );
+      fireEvent.click(screen.getByTestId("cell-0-2"));
+      expect(screen.getByText(/Admin rejected your answer/i)).toBeTruthy();
+
+      act(() => {
+        vi.advanceTimersByTime(8000);
+      });
+
+      expect(screen.queryByText(/Admin rejected your answer/i)).toBeNull();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("does not show a rejection message that was already seen", () => {
+    window.localStorage.setItem(
+      "crossword-rejection-seen:room-1",
+      JSON.stringify(["sub-1"]),
+    );
+    render(
+      <CrosswordGrid
+        roomId="room-1"
+        puzzle={puzzle}
+        playerRejected={[{ clueId: "A1", submissionId: "sub-1" }]}
+      />,
+    );
+    fireEvent.click(screen.getByTestId("cell-0-2"));
+    expect(screen.queryByText(/Admin rejected your answer/i)).toBeNull();
+    window.localStorage.clear();
   });
 
   it("visual distinction: correct/incorrect/pending use different DOM indicators", async () => {

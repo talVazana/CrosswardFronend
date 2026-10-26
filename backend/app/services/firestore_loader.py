@@ -169,6 +169,38 @@ def _restore_sessions() -> None:
             admin_module._admin_password_tokens.add(token)
 
 
+def _restore_submissions() -> None:
+    from datetime import datetime
+
+    from ..api.routes import submissions as submissions_module
+    from ..models.gameplay import Submission, SubmissionStatus
+
+    for document in firestore_publisher.read_collection("submissions"):
+        submission_id = document.get("_id")
+        room_id = document.get("roomId")
+        player_id = document.get("playerId")
+        clue_id = document.get("clueId")
+        if not submission_id or not room_id or not player_id or not clue_id:
+            continue
+        try:
+            status = SubmissionStatus(document.get("status") or "pending")
+            timestamp = datetime.fromisoformat(document.get("serverTimestamp") or "")
+        except (ValueError, TypeError):
+            continue
+        submissions_module.submission_repository.add(
+            Submission(
+                submissionId=submission_id,
+                roomId=room_id,
+                playerId=player_id,
+                clueId=clue_id,
+                answer=document.get("answer") or "",
+                serverTimestamp=timestamp,
+                status=status,
+                pointsAwarded=int(document.get("pointsAwarded") or 0),
+            )
+        )
+
+
 def _restore_player_states() -> None:
     from ..api.routes import drafts as drafts_module
     from ..models.gameplay import PlayerClueState
@@ -200,6 +232,7 @@ def restore_state() -> None:
         _restore_rooms()
         _restore_answers()
         _restore_sessions()
+        _restore_submissions()
         _restore_player_states()
     except Exception:
         # Never block startup because the mirror is unavailable.

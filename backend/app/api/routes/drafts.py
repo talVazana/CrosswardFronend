@@ -1,7 +1,7 @@
 from fastapi import APIRouter, HTTPException, Request
 from pydantic import BaseModel, Field
 
-from ...models.gameplay import PlayerClueState
+from ...models.gameplay import PlayerClueState, Submission, SubmissionStatus
 from ...models.room import RoomStatus
 from ...repositories.in_memory import InMemoryPlayerClueStateRepository
 from ...repositories.interfaces import PlayerClueStateRepository
@@ -89,6 +89,17 @@ def get_player_progress(roomId: str, request: Request):
     player_id = _resolve_player(request, roomId)
     _validate_request_identity(request, roomId, player_id)
     states = player_clue_state_repository.list_by_player(roomId, player_id)
+
+    from . import submissions as submissions_module
+
+    latest: dict[str, Submission] = {}
+    for submission in submissions_module.submission_repository.list_by_player(
+        roomId, player_id
+    ):
+        current = latest.get(submission.clueId)
+        if current is None or submission.serverTimestamp >= current.serverTimestamp:
+            latest[submission.clueId] = submission
+
     return {
         "solved": sorted(state.clueId for state in states if state.scored),
         "revealed": sorted(state.clueId for state in states if state.revealed),
@@ -97,4 +108,9 @@ def get_player_progress(roomId: str, request: Request):
             for state in states
             if state.solution and (state.scored or state.revealed)
         },
+        "rejected": [
+            {"clueId": clue_id, "submissionId": submission.submissionId}
+            for clue_id, submission in sorted(latest.items())
+            if submission.status is SubmissionStatus.rejected
+        ],
     }

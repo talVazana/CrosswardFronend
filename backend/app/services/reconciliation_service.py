@@ -1,5 +1,5 @@
 from ..models.gameplay import SubmissionStatus
-from ..services import scoring_service
+from ..services import firestore_publisher, scoring_service
 from ..services.puzzle_utils import normalize_answer
 
 
@@ -50,10 +50,12 @@ def reconcile_pending_submissions(room_id: str, clue_id: str, official_answer: s
                 submission_repository.update_status(
                     submission.submissionId, SubmissionStatus.correct, points
                 )
+                firestore_publisher.publish_submission(submission)
             else:
                 submission_repository.update_status(
                     submission.submissionId, SubmissionStatus.incorrect, 0
                 )
+                firestore_publisher.publish_submission(submission)
 
     if awarded_points > 0:
         from ..api.routes import events as events_module

@@ -83,6 +83,13 @@ class InMemorySubmissionRepository(SubmissionRepository):
             if s.roomId == room_id and s.status == SubmissionStatus.pending
         ]
 
+    def list_by_player(self, room_id: str, player_id: str) -> list[Submission]:
+        return [
+            s
+            for s in self._submissions.values()
+            if s.roomId == room_id and s.playerId == player_id
+        ]
+
     def update_status(self, submission_id: str, status: SubmissionStatus, points: int) -> None:
         submission = self._submissions.get(submission_id)
         if submission is None:

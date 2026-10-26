@@ -58,6 +58,9 @@ class SubmissionRepository(ABC):
     def list_pending_by_room(self, room_id: str) -> list[Submission]: ...
 
     @abstractmethod
+    def list_by_player(self, room_id: str, player_id: str) -> list[Submission]: ...
+
+    @abstractmethod
     def update_status(self, submission_id: str, status: SubmissionStatus, points: int) -> None: ...
 
 

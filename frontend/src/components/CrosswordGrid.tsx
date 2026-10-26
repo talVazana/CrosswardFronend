@@ -49,6 +49,23 @@ export type LiveRoomEvent = ClueSolvedEvent | RoomStatusChangedEvent;
 
 const EMPTY_SOLVED_CLUES: Record<string, string> = {};
 
+function rejectionSeenKey(roomId: string): string {
+  return `crossword-rejection-seen:${roomId}`;
+}
+
+function loadSeenRejections(roomId: string): string[] {
+  if (typeof window === "undefined") return [];
+  try {
+    const raw = window.localStorage.getItem(rejectionSeenKey(roomId));
+    const parsed: unknown = raw ? JSON.parse(raw) : [];
+    return Array.isArray(parsed)
+      ? parsed.filter((value): value is string => typeof value === "string")
+      : [];
+  } catch {
+    return [];
+  }
+}
+
 interface CrosswordGridProps {
   roomId: string;
   puzzle: Puzzle;
@@ -57,6 +74,7 @@ interface CrosswordGridProps {
   initialSolvedClues?: Record<string, string>;
   initialAnswers?: Record<string, string>;
   playerSolvedClues?: string[];
+  playerRejected?: { clueId: string; submissionId: string }[];
   onClueSolved?: (clueId: string) => void;
   onClueRevealed?: (clueId: string) => void;
 }
@@ -69,6 +87,7 @@ export default function CrosswordGrid({
   initialSolvedClues = EMPTY_SOLVED_CLUES,
   initialAnswers,
   playerSolvedClues,
+  playerRejected,
   onClueSolved,
   onClueRevealed,
 }: CrosswordGridProps) {
@@ -131,6 +150,39 @@ export default function CrosswordGrid({
   const isRevealed = activeClueId ? revealedClues[activeClueId] ?? false : false;
   const ownSolvedClueIds = new Set(playerSolvedClues ?? []);
   const isOwnSolved = activeClueId ? ownSolvedClueIds.has(activeClueId) : false;
+  const activeRejection = activeClueId
+    ? (playerRejected ?? []).find((entry) => entry.clueId === activeClueId) ?? null
+    : null;
+  const [seenRejections, setSeenRejections] = useState<string[]>([]);
+  useEffect(() => {
+    setSeenRejections(loadSeenRejections(roomId));
+  }, [roomId]);
+  const markRejectionSeen = useCallback(
+    (submissionId: string) => {
+      setSeenRejections((prev) => {
+        if (prev.includes(submissionId)) return prev;
+        const next = [...prev, submissionId].slice(-100);
+        try {
+          window.localStorage.setItem(rejectionSeenKey(roomId), JSON.stringify(next));
+        } catch {
+          // Storage can be unavailable in private mode; the message still hides.
+        }
+        return next;
+      });
+    },
+    [roomId],
+  );
+  const showRejection =
+    activeRejection !== null && !seenRejections.includes(activeRejection.submissionId);
+  const rejectionSubmissionId = activeRejection?.submissionId ?? null;
+  useEffect(() => {
+    if (!showRejection || rejectionSubmissionId === null) return;
+    const timer = window.setTimeout(
+      () => markRejectionSeen(rejectionSubmissionId),
+      8000,
+    );
+    return () => window.clearTimeout(timer);
+  }, [showRejection, rejectionSubmissionId, markRejectionSeen]);
   const isComplete =
     activeCells.length > 0 &&
     activeCells.every((cell) => (letters[cellKey(cell.row, cell.col)] ?? "").trim().length > 0);
@@ -627,7 +679,12 @@ export default function CrosswordGrid({
                   Incorrect, try again
                 </span>
               ) : null}
-              {feedback === "pending" ? (
+              {showRejection ? (
+                <span role="status" className="text-sm font-medium text-amber-800">
+                  Admin rejected your answer for this clue. Try again.
+                </span>
+              ) : null}
+              {feedback === "pending" && !showRejection ? (
                 <span role="status" className="text-sm font-medium text-yellow-700">
                   Waiting for Admin
                 </span>

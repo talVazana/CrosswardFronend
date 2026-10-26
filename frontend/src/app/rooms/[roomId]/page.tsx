@@ -32,7 +32,8 @@ export default function RoomLobbyPage() {
     solved: string[];
     revealed: string[];
     answers: Record<string, string>;
-  }>({ solved: [], revealed: [], answers: {} });
+    rejected: { clueId: string; submissionId: string }[];
+  }>({ solved: [], revealed: [], answers: {}, rejected: [] });
   const [me, setMe] = useState<{
     playerId: string;
     displayName: string;
@@ -50,7 +51,28 @@ export default function RoomLobbyPage() {
         solved?: unknown;
         revealed?: unknown;
         answers?: unknown;
+        rejected?: unknown;
       };
+      const rejected: { clueId: string; submissionId: string }[] = Array.isArray(
+        body.rejected,
+      )
+        ? body.rejected.flatMap((entry) => {
+            if (
+              entry &&
+              typeof entry === "object" &&
+              typeof (entry as { clueId?: unknown }).clueId === "string" &&
+              typeof (entry as { submissionId?: unknown }).submissionId === "string"
+            ) {
+              return [
+                {
+                  clueId: (entry as { clueId: string }).clueId,
+                  submissionId: (entry as { submissionId: string }).submissionId,
+                },
+              ];
+            }
+            return [];
+          })
+        : [];
       setPlayerProgress({
         solved: Array.isArray(body.solved)
           ? body.solved.filter((value): value is string => typeof value === "string")
@@ -66,6 +88,7 @@ export default function RoomLobbyPage() {
                 ),
               )
             : {},
+        rejected,
       });
     } catch {
       // Progress is optional for visitors without a player session.
@@ -99,6 +122,13 @@ export default function RoomLobbyPage() {
 
   useEffect(() => {
     void loadPlayerProgress();
+  }, [loadPlayerProgress]);
+
+  useEffect(() => {
+    const interval = window.setInterval(() => {
+      if (document.visibilityState === "visible") void loadPlayerProgress();
+    }, 5000);
+    return () => window.clearInterval(interval);
   }, [loadPlayerProgress]);
 
   useEffect(() => {
@@ -273,6 +303,7 @@ export default function RoomLobbyPage() {
                 initialSolvedClues={solvedCluesMap}
                 initialAnswers={playerProgress.answers}
                 playerSolvedClues={playerProgress.solved}
+                playerRejected={playerProgress.rejected}
                 onClueSolved={handleClueSolved}
                 onClueRevealed={handleClueRevealed}
               />

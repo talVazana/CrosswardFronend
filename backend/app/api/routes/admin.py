@@ -321,6 +321,7 @@ def reject_submission(roomId: str, submissionId: str, request: Request):
     submissions_module.submission_repository.update_status(
         submissionId, SubmissionStatus.rejected, 0
     )
+    firestore_publisher.publish_submission(submission)
     return {
         "status": SubmissionStatus.rejected.value,
         "clueId": submission.clueId,
