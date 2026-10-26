@@ -67,17 +67,9 @@ function AdminRoomCard({ room }: { room: RoomSummary }) {
         >
           Open dashboard
         </Link>
-        <div className="flex gap-2">
-          <Link href={`/rooms/${room.roomId}`} className="btn-ghost flex-1 text-sm">
-            Player view
-          </Link>
-          <Link
-            href={`/rooms/${room.roomId}/join`}
-            className="btn-ghost flex-1 text-sm"
-          >
-            Join as player
-          </Link>
-        </div>
+        <Link href={`/rooms/${room.roomId}`} className="btn-ghost w-full text-sm">
+          Player view
+        </Link>
       </div>
     </article>
   );

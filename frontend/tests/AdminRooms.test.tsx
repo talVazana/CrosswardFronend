@@ -113,9 +113,6 @@ describe("admin room gallery", () => {
     expect(
       screen.getByRole("link", { name: "Player view" }).getAttribute("href"),
     ).toBe("/rooms/alpha");
-    expect(
-      screen.getByRole("link", { name: "Join as player" }).getAttribute("href"),
-    ).toBe("/rooms/alpha/join");
   });
 
   it("reports an incorrect admin password", async () => {
