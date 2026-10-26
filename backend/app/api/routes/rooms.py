@@ -129,6 +129,26 @@ def get_room_state(roomId: str):
     return state
 
 
+@router.get("/rooms/{roomId}/me")
+def get_room_player(
+    roomId: str,
+    session_token: str | None = Cookie(default=None, alias="Session-Token"),
+):
+    if session_token is None:
+        raise HTTPException(status_code=401, detail="Unauthorized")
+    session = _sessions.get(session_token)
+    if session is None or session[0] != roomId:
+        raise HTTPException(status_code=401, detail="Unauthorized")
+    player = player_repository.get(roomId, session[1])
+    if player is None:
+        raise HTTPException(status_code=401, detail="Unauthorized")
+    return {
+        "playerId": player.playerId,
+        "displayName": player.displayName,
+        "color": player.color,
+    }
+
+
 @router.get("/rooms/{roomId}/image")
 def get_room_image(roomId: str):
     result = firestore_publisher.get_room_image(roomId)

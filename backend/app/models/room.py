@@ -17,14 +17,14 @@ class RoomStatus(str, Enum):
 
 
 ASSIGNED_PLAYER_COLORS: tuple[str, ...] = (
-    "#F87171",
-    "#FB923C",
-    "#FACC15",
-    "#34D399",
-    "#22D3EE",
-    "#3b82f6",
-    "#A78BFA",
-    "#F472B6",
+    "#DC2626",  # red
+    "#0D9488",  # teal
+    "#CA8A04",  # amber
+    "#9333EA",  # purple
+    "#DB2777",  # pink
+    "#EA580C",  # orange
+    "#4D7C0F",  # olive
+    "#1D4ED8",  # blue
 )
 
 

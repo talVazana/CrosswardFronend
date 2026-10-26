@@ -124,7 +124,7 @@ describe("TASK-048 Scoreboard UI", () => {
 
     expect(await screen.findByText("Dana")).toBeTruthy();
     expect(await screen.findByText("Alice")).toBeTruthy();
-    expect(screen.getByRole("list", { name: "Participants" })).toBeTruthy();
+    expect(screen.queryByRole("list", { name: "Participants" })).toBeNull();
     expect(screen.getByRole("list", { name: "Scoreboard" })).toBeTruthy();
   });
 

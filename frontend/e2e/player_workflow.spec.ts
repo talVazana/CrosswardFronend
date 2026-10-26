@@ -64,7 +64,7 @@ async function selectClue(page: Page, startCell: readonly [number, number], dire
 }
 
 function participantRow(page: Page, name: string) {
-  return page.locator("ul[aria-label='Participants'] li").filter({ hasText: name });
+  return page.locator("ul[aria-label='Scoreboard'] li").filter({ hasText: name });
 }
 
 // Numbered start cell renders "<number><letter>" in one button; assert only the draft letter.

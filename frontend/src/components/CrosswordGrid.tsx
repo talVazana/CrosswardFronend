@@ -56,6 +56,7 @@ interface CrosswordGridProps {
   liveEvent?: LiveRoomEvent | null;
   initialSolvedClues?: Record<string, string>;
   initialAnswers?: Record<string, string>;
+  playerSolvedClues?: string[];
   onClueSolved?: (clueId: string) => void;
   onClueRevealed?: (clueId: string) => void;
 }
@@ -67,6 +68,7 @@ export default function CrosswordGrid({
   liveEvent,
   initialSolvedClues = EMPTY_SOLVED_CLUES,
   initialAnswers,
+  playerSolvedClues,
   onClueSolved,
   onClueRevealed,
 }: CrosswordGridProps) {
@@ -127,6 +129,8 @@ export default function CrosswordGrid({
     : -1;
 
   const isRevealed = activeClueId ? revealedClues[activeClueId] ?? false : false;
+  const ownSolvedClueIds = new Set(playerSolvedClues ?? []);
+  const isOwnSolved = activeClueId ? ownSolvedClueIds.has(activeClueId) : false;
   const isComplete =
     activeCells.length > 0 &&
     activeCells.every((cell) => (letters[cellKey(cell.row, cell.col)] ?? "").trim().length > 0);
@@ -396,9 +400,12 @@ export default function CrosswordGrid({
   ]);
 
   const reveal = useCallback(async () => {
-    if (!activeClueId || revealing || isRevealed || isPaused) return;
+    if (!activeClueId || revealing || isRevealed || isPaused || isOwnSolved) return;
+    const clueLabel = activeClue
+      ? `${activeClue.number} ${activeClue.direction === "across" ? "Across" : "Down"}`
+      : "this clue";
     const confirmed = window.confirm(
-      "Are you sure? You will not earn points for this clue.",
+      `Reveal ${clueLabel}? You will not earn points for this clue.`,
     );
     if (!confirmed) return;
 
@@ -449,6 +456,7 @@ export default function CrosswordGrid({
     revealing,
     isRevealed,
     roomId,
+    isOwnSolved,
     isPaused,
     onClueRevealed,
   ]);
@@ -583,7 +591,16 @@ export default function CrosswordGrid({
               <button
                 type="button"
                 onClick={() => void reveal()}
-                disabled={isRevealed || isPaused || revealing}
+                disabled={isRevealed || isPaused || revealing || isOwnSolved}
+                title={
+                  isOwnSolved
+                    ? "You already solved this clue"
+                    : activeClue
+                    ? `Reveal ${activeClue.number} ${
+                        activeClue.direction === "across" ? "Across" : "Down"
+                      }`
+                    : "Reveal Answer"
+                }
                 className="btn-ghost"
               >
                 {revealing ? "Revealing..." : "Reveal Answer"}

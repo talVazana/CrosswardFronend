@@ -5,8 +5,8 @@ import Link from "next/link";
 import { useParams } from "next/navigation";
 import AdminCrossword from "@/components/AdminCrossword";
 import ClueList from "@/components/ClueList";
-import ParticipantList, { Participant } from "@/components/ParticipantList";
 import Scoreboard from "@/components/Scoreboard";
+import type { Participant } from "@/components/ParticipantList";
 import type { Puzzle } from "@/components/CrosswordGrid";
 import LoadingSpinner from "@/components/ui/LoadingSpinner";
 import ErrorMessage from "@/components/ui/ErrorMessage";
@@ -332,24 +332,17 @@ export default function AdminRoomDashboardPage() {
             </section>
           ) : null}
 
-          <div className="grid gap-6 md:grid-cols-2">
-            <section className="glass flex flex-col gap-2 px-6 py-4">
-              <h2 className="text-lg font-semibold text-blue-800">Participants</h2>
-              {players.length === 0 ? (
-                <EmptyState
-                  title="No participants yet"
-                  message="Players will appear here once they join the room."
-                />
-              ) : (
-                <ParticipantList players={players} />
-              )}
-            </section>
-
-            <section className="glass flex flex-col gap-2 px-6 py-4">
-              <h2 className="text-lg font-semibold text-blue-800">Scoreboard</h2>
+          <section className="glass flex flex-col gap-2 px-6 py-4">
+            <h2 className="text-lg font-semibold text-blue-800">Players</h2>
+            {publicScores.length === 0 ? (
+              <EmptyState
+                title="No participants yet"
+                message="Players will appear here once they join the room."
+              />
+            ) : (
               <Scoreboard scores={publicScores} />
-            </section>
-          </div>
+            )}
+          </section>
 
           <section className="glass flex flex-col gap-2 px-6 py-4">
             <h2 className="text-lg font-semibold text-blue-800">Pending Submissions</h2>

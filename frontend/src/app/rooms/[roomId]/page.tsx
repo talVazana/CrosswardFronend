@@ -5,7 +5,6 @@ import Link from "next/link";
 import { useParams } from "next/navigation";
 import CrosswordGrid from "@/components/CrosswordGrid";
 import ClueList from "@/components/ClueList";
-import ParticipantList, { Participant } from "@/components/ParticipantList";
 import Scoreboard from "@/components/Scoreboard";
 import LoadingSpinner from "@/components/ui/LoadingSpinner";
 import ErrorMessage from "@/components/ui/ErrorMessage";
@@ -34,6 +33,7 @@ export default function RoomLobbyPage() {
     revealed: string[];
     answers: Record<string, string>;
   }>({ solved: [], revealed: [], answers: {} });
+  const [me, setMe] = useState<{ displayName: string; color: string } | null>(null);
 
   const loadPlayerProgress = useCallback(async () => {
     try {
@@ -98,6 +98,33 @@ export default function RoomLobbyPage() {
   }, [loadPlayerProgress]);
 
   useEffect(() => {
+    let cancelled = false;
+    const loadMe = async () => {
+      try {
+        const base = process.env.NEXT_PUBLIC_BACKEND_URL ?? "http://localhost:8000";
+        const res = await fetch(`${base}/rooms/${roomId}/me`, {
+          credentials: "include",
+        });
+        if (!res.ok) return;
+        const body = (await res.json()) as {
+          displayName?: unknown;
+          color?: unknown;
+        };
+        if (cancelled) return;
+        if (typeof body.displayName === "string" && typeof body.color === "string") {
+          setMe({ displayName: body.displayName, color: body.color });
+        }
+      } catch {
+        // Visitors without a player session have no identity to show.
+      }
+    };
+    void loadMe();
+    return () => {
+      cancelled = true;
+    };
+  }, [roomId]);
+
+  useEffect(() => {
     if (!showOriginal) return;
     const onKey = (event: globalThis.KeyboardEvent) => {
       if (event.key === "Escape") setShowOriginal(false);
@@ -122,7 +149,6 @@ export default function RoomLobbyPage() {
     );
   }, []);
 
-  const players: Participant[] = room?.players ?? [];
   const puzzle = room?.puzzle;
   const displayClues =
     puzzle?.displayClues && puzzle.displayClues.length > 0
@@ -135,6 +161,31 @@ export default function RoomLobbyPage() {
     }
     return map;
   }, [room?.solvedClues]);
+  const playerScores = useMemo(() => {
+    const scoresByKey = new Map(
+      (room?.scores ?? []).map((entry) => [entry.playerId, entry.totalPoints]),
+    );
+    const result: {
+      playerId: string;
+      displayName: string;
+      color: string;
+      totalPoints: number;
+    }[] = [];
+    const seen = new Set<string>();
+    for (const player of room?.players ?? []) {
+      seen.add(player.id);
+      result.push({
+        playerId: player.id,
+        displayName: player.displayName,
+        color: player.color,
+        totalPoints: scoresByKey.get(player.id) ?? 0,
+      });
+    }
+    for (const score of room?.scores ?? []) {
+      if (!seen.has(score.playerId)) result.push(score);
+    }
+    return result;
+  }, [room?.players, room?.scores]);
   const statusLabel = room?.status
     ? (STATUS_LABELS[room.status] ?? room.status)
     : null;
@@ -151,7 +202,22 @@ export default function RoomLobbyPage() {
         <>
           <header className="glass flex flex-wrap items-center justify-between gap-3 px-6 py-4">
             <div className="flex flex-col gap-2">
-              <h1 className="brand text-2xl">{room.title ?? "Crossword"}</h1>
+              <div className="flex flex-wrap items-center gap-3">
+                <h1 className="brand text-2xl">{room.title ?? "Crossword"}</h1>
+                {me ? (
+                  <span
+                    data-testid="player-identity"
+                    className="inline-flex items-center gap-2 rounded-full bg-white/70 px-3 py-1 text-sm font-medium text-blue-900"
+                  >
+                    <span
+                      data-testid="player-identity-color"
+                      className="inline-block h-3 w-3 rounded-full border border-blue-900/20"
+                      style={{ backgroundColor: me.color }}
+                    />
+                    {me.displayName}
+                  </span>
+                ) : null}
+              </div>
               {statusLabel ? (
                 <span className="inline-flex w-fit items-center gap-2 rounded-full bg-blue-100/70 px-3 py-1 text-sm font-medium text-blue-700">
                   <span className="inline-block h-2 w-2 rounded-full bg-blue-500" />
@@ -183,6 +249,7 @@ export default function RoomLobbyPage() {
                 roomStatus={room.status}
                 initialSolvedClues={solvedCluesMap}
                 initialAnswers={playerProgress.answers}
+                playerSolvedClues={playerProgress.solved}
                 onClueSolved={handleClueSolved}
                 onClueRevealed={handleClueRevealed}
               />
@@ -203,23 +270,17 @@ export default function RoomLobbyPage() {
               />
             </section>
           ) : null}
-          <div className="grid gap-6 md:grid-cols-2">
-            <section className="glass flex flex-col gap-2 px-6 py-4">
-              <h2 className="text-lg font-semibold text-blue-800">Participants</h2>
-              {players.length === 0 ? (
-                <EmptyState
-                  title="No participants yet"
-                  message="Players will appear here once they join the room."
-                />
-              ) : (
-                <ParticipantList players={players} />
-              )}
-            </section>
-            <section className="glass flex flex-col gap-2 px-6 py-4">
-              <h2 className="text-lg font-semibold text-blue-800">Scoreboard</h2>
-              <Scoreboard scores={room.scores} loading={loading} />
-            </section>
-          </div>
+          <section className="glass flex flex-col gap-2 px-6 py-4">
+            <h2 className="text-lg font-semibold text-blue-800">Players</h2>
+            {playerScores.length === 0 ? (
+              <EmptyState
+                title="No participants yet"
+                message="Players will appear here once they join the room."
+              />
+            ) : (
+              <Scoreboard scores={playerScores} loading={loading} />
+            )}
+          </section>
           {showOriginal ? (
             <div
               role="dialog"

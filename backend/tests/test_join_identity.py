@@ -87,3 +87,20 @@ def test_rejoin_with_different_name_creates_new_player(client):
     players = client.get(f"/rooms/{ROOM_ID}/state").json()["players"]
     names = sorted(player["displayName"] for player in players)
     assert names == ["Dana", "Noam"]
+
+
+def test_room_me_returns_current_player_identity(client):
+    joined = client.post(f"/rooms/{ROOM_ID}/join", json={"displayName": "Dana"}).json()
+
+    response = client.get(f"/rooms/{ROOM_ID}/me")
+
+    assert response.status_code == 200
+    assert response.json() == {
+        "playerId": joined["playerId"],
+        "displayName": "Dana",
+        "color": joined["color"],
+    }
+
+
+def test_room_me_without_session_returns_401(client):
+    assert client.get(f"/rooms/{ROOM_ID}/me").status_code == 401
