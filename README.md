@@ -46,6 +46,19 @@ Stop both processes:
 ./scripts/stop-dev.ps1
 ```
 
+## Firestore emulator (local development)
+
+Start the Firebase Firestore emulator in its own terminal:
+
+```powershell
+./scripts/start-emulators.ps1
+```
+
+- Firestore endpoint: `http://127.0.0.1:8080`
+- Emulator UI: `http://127.0.0.1:4000`
+- Project ID: `demo-crossword-arena`
+- Local data and logs live under `.firebase/`, which is intentionally ignored by Git.
+
 ## Testing
 
 Run the full test suite (backend pytest + frontend vitest) with one script:

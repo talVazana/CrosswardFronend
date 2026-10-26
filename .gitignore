@@ -45,6 +45,13 @@ pnpm-debug.log*
 *.seed
 *.stackdump
 
+# Firebase emulators and local data
+.firebase/
+firebase-debug.log*
+firestore-debug.log*
+ui-debug.log*
+firebase-export-*
+
 # Agent / temporary artifacts
 .agentic_pipeline_tmp/
 tmp-*

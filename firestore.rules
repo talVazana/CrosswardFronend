@@ -1,0 +1,11 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // FastAPI owns all reads and writes through the Admin SDK.
+    // Client SDK access stays disabled until explicit public/read-only rules exist.
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}
