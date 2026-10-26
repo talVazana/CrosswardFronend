@@ -5,6 +5,7 @@ from fastapi import APIRouter, HTTPException, Request, Response
 from pydantic import BaseModel
 
 from ...models.answers import OfficialAnswers
+from ...models.gameplay import SubmissionStatus
 from ...models.room import Player, Room, RoomStatus
 from ...repositories.in_memory import InMemoryAnswerRepository
 from ...repositories.interfaces import AnswerRepository
@@ -294,6 +295,7 @@ def get_admin_room_state(roomId: str, request: Request):
         ],
         "pendingSubmissions": [
             {
+                "submissionId": s.submissionId,
                 "clueId": s.clueId,
                 "playerId": s.playerId,
                 "answer": s.answer,
@@ -301,6 +303,28 @@ def get_admin_room_state(roomId: str, request: Request):
             for s in submissions_module.submission_repository.list_pending_by_room(roomId)
         ],
         "scores": scores,
+    }
+
+
+@router.post("/admin/rooms/{roomId}/submissions/{submissionId}/reject")
+def reject_submission(roomId: str, submissionId: str, request: Request):
+    _resolve_admin(request)
+
+    from . import submissions as submissions_module
+
+    submission = submissions_module.submission_repository.get(submissionId)
+    if submission is None or submission.roomId != roomId:
+        raise HTTPException(status_code=404, detail="Submission not found")
+    if submission.status is not SubmissionStatus.pending:
+        raise HTTPException(status_code=409, detail="Submission already reviewed")
+
+    submissions_module.submission_repository.update_status(
+        submissionId, SubmissionStatus.rejected, 0
+    )
+    return {
+        "status": SubmissionStatus.rejected.value,
+        "clueId": submission.clueId,
+        "playerId": submission.playerId,
     }
 
 

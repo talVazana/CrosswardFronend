@@ -69,18 +69,12 @@ def join_room(roomId: str, body: JoinRequest, response: Response, session_token:
                 return {"playerId": existing.playerId, "color": existing.color}
 
     with _join_lock:
-        active_player_ids = {
-            player_id
-            for token, (session_room_id, player_id) in _sessions.items()
-            if session_room_id == roomId
-        }
         reclaimed = next(
             (
                 player
                 for player in player_repository.list_by_room(roomId)
                 if player.role == "player"
                 and player.displayName.casefold() == desired_name.casefold()
-                and player.playerId not in active_player_ids
             ),
             None,
         )

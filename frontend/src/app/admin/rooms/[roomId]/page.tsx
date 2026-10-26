@@ -17,6 +17,7 @@ type RoomStatus = "draft" | "lobby" | "active" | "paused" | "finished" | "closed
 type LifecycleAction = "start" | "pause" | "resume" | "finish" | "close";
 
 interface PendingSubmission {
+  submissionId?: string;
   clueId?: string;
   playerId?: string;
   answer?: string;
@@ -88,6 +89,7 @@ export default function AdminRoomDashboardPage() {
   const [actionError, setActionError] = useState<string | null>(null);
   const [busy, setBusy] = useState<LifecycleAction | null>(null);
   const [approving, setApproving] = useState<string | null>(null);
+  const [rejecting, setRejecting] = useState<string | null>(null);
   const lastActionRef = useRef<LifecycleAction | null>(null);
 
   const load = useCallback(async (showSpinner = true) => {
@@ -199,6 +201,44 @@ export default function AdminRoomDashboardPage() {
       }
     },
     [room?.puzzleId, load],
+  );
+
+  const rejectSubmission = useCallback(
+    async (submission: PendingSubmission, index: number) => {
+      if (!submission.submissionId) {
+        setActionError("Submission is missing an identifier");
+        return;
+      }
+
+      const confirmed = window.confirm(
+        `Reject this answer for clue ${submission.clueId ?? "?"}? The clue stays unsolved and no points are awarded.`,
+      );
+      if (!confirmed) return;
+
+      const key = `${submission.clueId ?? "?"}:${submission.playerId ?? "unknown"}:${index}`;
+      setRejecting(key);
+      setActionError(null);
+      try {
+        const base = process.env.NEXT_PUBLIC_BACKEND_URL ?? "http://localhost:8000";
+        const res = await fetch(
+          `${base}/admin/rooms/${roomId}/submissions/${submission.submissionId}/reject`,
+          {
+            method: "POST",
+            credentials: "include",
+          },
+        );
+        if (!res.ok) {
+          setActionError(`Failed to reject submission (status ${res.status})`);
+          return;
+        }
+        await load();
+      } catch {
+        setActionError("Network error. Please try again.");
+      } finally {
+        setRejecting(null);
+      }
+    },
+    [roomId, load],
   );
 
   const status = room?.status;
@@ -376,6 +416,7 @@ export default function AdminRoomDashboardPage() {
                         onClick={() => void approveSubmission(submission, index)}
                         disabled={
                           approving !== null ||
+                          rejecting !== null ||
                           !room.puzzleId ||
                           !submission.clueId ||
                           !submission.answer
@@ -384,6 +425,19 @@ export default function AdminRoomDashboardPage() {
                         aria-label={`Approve clue ${submission.clueId ?? "unknown"} for ${playerName}`}
                       >
                         {approving === key ? "Approving..." : "Approve"}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => void rejectSubmission(submission, index)}
+                        disabled={
+                          approving !== null ||
+                          rejecting !== null ||
+                          !submission.submissionId
+                        }
+                        className="glass-soft shrink-0 px-3 py-1 text-xs font-medium text-blue-900"
+                        aria-label={`Reject answer for clue ${submission.clueId ?? "unknown"} from ${playerName}`}
+                      >
+                        {rejecting === key ? "Rejecting..." : "Reject"}
                       </button>
                     </li>
                   );

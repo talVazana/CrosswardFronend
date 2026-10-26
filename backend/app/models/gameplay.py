@@ -9,6 +9,7 @@ class SubmissionStatus(str, Enum):
     pending = "pending"
     correct = "correct"
     incorrect = "incorrect"
+    rejected = "rejected"
 
 
 def utc_now() -> datetime:

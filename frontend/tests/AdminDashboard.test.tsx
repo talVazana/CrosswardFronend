@@ -249,4 +249,47 @@ describe("TASK-034 admin dashboard UI", () => {
     });
     await waitFor(() => expect(gets).toBeGreaterThanOrEqual(2));
   });
+
+  it("rejecting a pending submission posts to the reject endpoint and reloads", async () => {
+    const pendingRoom = {
+      ...room("active"),
+      puzzleId: "puzzle-1",
+      pendingSubmissions: [
+        { submissionId: "sub-1", clueId: "A1", playerId: "p1", answer: "APPLE" },
+      ],
+    };
+    let gets = 0;
+    const mockFetch = vi.fn(async (_input: RequestInfo | URL, init?: RequestInit) => {
+      if (init?.method === "POST") return response(200, { status: "rejected" });
+      gets += 1;
+      return response(
+        200,
+        gets === 1 ? pendingRoom : { ...pendingRoom, pendingSubmissions: [] },
+      );
+    });
+    vi.stubGlobal("fetch", mockFetch);
+    vi.stubGlobal("confirm", vi.fn(() => true));
+
+    render(<AdminRoomDashboardPage />);
+    const reject = await screen.findByRole("button", {
+      name: /Reject answer for clue A1 from Alice/i,
+    });
+    fireEvent.click(reject);
+
+    await waitFor(() => {
+      const posts = mockFetch.mock.calls.filter(
+        ([, init]) => (init as RequestInit | undefined)?.method === "POST",
+      );
+      expect(posts.length).toBe(1);
+      expect(String(posts[0][0]).endsWith("/admin/rooms/room-1/submissions/sub-1/reject")).toBe(
+        true,
+      );
+    });
+    await waitFor(() => expect(gets).toBeGreaterThanOrEqual(2));
+    await waitFor(() =>
+      expect(
+        screen.queryByRole("button", { name: /Reject answer for clue A1 from Alice/i }),
+      ).toBeNull(),
+    );
+  });
 });

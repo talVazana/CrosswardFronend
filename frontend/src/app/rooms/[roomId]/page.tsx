@@ -33,7 +33,11 @@ export default function RoomLobbyPage() {
     revealed: string[];
     answers: Record<string, string>;
   }>({ solved: [], revealed: [], answers: {} });
-  const [me, setMe] = useState<{ displayName: string; color: string } | null>(null);
+  const [me, setMe] = useState<{
+    playerId: string;
+    displayName: string;
+    color: string;
+  } | null>(null);
 
   const loadPlayerProgress = useCallback(async () => {
     try {
@@ -104,23 +108,38 @@ export default function RoomLobbyPage() {
         const base = process.env.NEXT_PUBLIC_BACKEND_URL ?? "http://localhost:8000";
         const res = await fetch(`${base}/rooms/${roomId}/me`, {
           credentials: "include",
+          cache: "no-store",
         });
         if (!res.ok) return;
         const body = (await res.json()) as {
+          playerId?: unknown;
           displayName?: unknown;
           color?: unknown;
         };
         if (cancelled) return;
-        if (typeof body.displayName === "string" && typeof body.color === "string") {
-          setMe({ displayName: body.displayName, color: body.color });
+        if (
+          typeof body.playerId === "string" &&
+          typeof body.displayName === "string" &&
+          typeof body.color === "string"
+        ) {
+          setMe({
+            playerId: body.playerId,
+            displayName: body.displayName,
+            color: body.color,
+          });
         }
       } catch {
         // Visitors without a player session have no identity to show.
       }
     };
     void loadMe();
+    const refresh = () => void loadMe();
+    window.addEventListener("focus", refresh);
+    document.addEventListener("visibilitychange", refresh);
     return () => {
       cancelled = true;
+      window.removeEventListener("focus", refresh);
+      document.removeEventListener("visibilitychange", refresh);
     };
   }, [roomId]);
 
@@ -191,6 +210,10 @@ export default function RoomLobbyPage() {
     : null;
   const playerSolvedClueIds = new Set(playerProgress.solved);
   const playerRevealedClueIds = new Set(playerProgress.revealed);
+  const myColor = me
+    ? (room?.players ?? []).find((player) => player.id === me.playerId)?.color ??
+      me.color
+    : null;
 
   return (
     <main className="mx-auto flex min-h-screen w-full max-w-4xl flex-col gap-6 overflow-x-hidden p-6">
@@ -212,7 +235,7 @@ export default function RoomLobbyPage() {
                     <span
                       data-testid="player-identity-color"
                       className="inline-block h-3 w-3 rounded-full border border-blue-900/20"
-                      style={{ backgroundColor: me.color }}
+                      style={{ backgroundColor: myColor ?? me.color }}
                     />
                     {me.displayName}
                   </span>

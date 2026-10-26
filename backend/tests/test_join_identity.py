@@ -89,6 +89,31 @@ def test_rejoin_with_different_name_creates_new_player(client):
     assert names == ["Dana", "Noam"]
 
 
+def test_join_without_session_claims_existing_player_by_name(client):
+    first = client.post(f"/rooms/{ROOM_ID}/join", json={"displayName": "Dana"})
+    client.cookies.clear()
+
+    second = client.post(f"/rooms/{ROOM_ID}/join", json={"displayName": "Dana"})
+
+    assert second.status_code == 200
+    assert second.json()["playerId"] == first.json()["playerId"]
+    players = client.get(f"/rooms/{ROOM_ID}/state").json()["players"]
+    assert len(players) == 1
+
+
+def test_join_claims_existing_player_even_with_stale_session(client):
+    first = client.post(f"/rooms/{ROOM_ID}/join", json={"displayName": "Dana"}).json()
+    rooms_module._sessions["stale-token"] = (ROOM_ID, first["playerId"])
+    client.cookies.clear()
+
+    second = client.post(f"/rooms/{ROOM_ID}/join", json={"displayName": "Dana"})
+
+    assert second.status_code == 200
+    assert second.json()["playerId"] == first["playerId"]
+    players = client.get(f"/rooms/{ROOM_ID}/state").json()["players"]
+    assert len(players) == 1
+
+
 def test_room_me_returns_current_player_identity(client):
     joined = client.post(f"/rooms/{ROOM_ID}/join", json={"displayName": "Dana"}).json()
 

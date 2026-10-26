@@ -204,9 +204,12 @@ def test_pending_submission_is_approved_manually_and_admin_grid_fills_with_first
 
     as_admin(client)
     admin_state = client.get(f"/admin/rooms/{ROOM_ID}").json()
-    assert admin_state["pendingSubmissions"] == [
-        {"clueId": CLUE_ID, "playerId": PLAYER_A, "answer": ANSWER}
-    ]
+    pending_entries = admin_state["pendingSubmissions"]
+    assert len(pending_entries) == 1
+    assert pending_entries[0]["submissionId"]
+    assert {
+        key: pending_entries[0][key] for key in ("clueId", "playerId", "answer")
+    } == {"clueId": CLUE_ID, "playerId": PLAYER_A, "answer": ANSWER}
 
     approve(client)
     stored = env["submission_repository"].list_pending_by_room(ROOM_ID)
@@ -233,6 +236,52 @@ def test_public_state_never_exposes_approved_solution(env):
 
     assert ANSWER not in response.text
     assert "officialAnswers" not in response.json()
+
+
+def test_admin_can_reject_pending_submission_without_scoring(env):
+    client = env["client"]
+    assert submit(client, TOKEN_A).json() == {"status": "pending"}
+
+    as_admin(client)
+    pending = client.get(f"/admin/rooms/{ROOM_ID}").json()["pendingSubmissions"]
+    assert len(pending) == 1
+    submission_id = pending[0]["submissionId"]
+
+    response = client.post(
+        f"/admin/rooms/{ROOM_ID}/submissions/{submission_id}/reject"
+    )
+
+    assert response.status_code == 200, response.text
+    assert response.json() == {
+        "status": "rejected",
+        "clueId": CLUE_ID,
+        "playerId": PLAYER_A,
+    }
+    assert client.get(f"/admin/rooms/{ROOM_ID}").json()["pendingSubmissions"] == []
+    assert public_state(client)["solvedClues"] == []
+    assert progress(client, TOKEN_A) == {"solved": [], "revealed": [], "answers": {}}
+
+
+def test_rejecting_same_submission_twice_returns_conflict(env):
+    client = env["client"]
+    assert submit(client, TOKEN_A).json() == {"status": "pending"}
+
+    as_admin(client)
+    pending = client.get(f"/admin/rooms/{ROOM_ID}").json()["pendingSubmissions"]
+    submission_id = pending[0]["submissionId"]
+    url = f"/admin/rooms/{ROOM_ID}/submissions/{submission_id}/reject"
+
+    assert client.post(url).status_code == 200
+    assert client.post(url).status_code == 409
+
+
+def test_rejecting_unknown_submission_returns_not_found(env):
+    client = env["client"]
+    as_admin(client)
+
+    response = client.post(f"/admin/rooms/{ROOM_ID}/submissions/submission-missing/reject")
+
+    assert response.status_code == 404
 
 
 def test_revealed_player_earns_zero_and_later_solver_becomes_first_solver(env):
