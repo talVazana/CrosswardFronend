@@ -32,7 +32,8 @@ export default function RoomLobbyPage() {
   const [playerProgress, setPlayerProgress] = useState<{
     solved: string[];
     revealed: string[];
-  }>({ solved: [], revealed: [] });
+    answers: Record<string, string>;
+  }>({ solved: [], revealed: [], answers: {} });
 
   const loadPlayerProgress = useCallback(async () => {
     try {
@@ -44,6 +45,7 @@ export default function RoomLobbyPage() {
       const body = (await res.json()) as {
         solved?: unknown;
         revealed?: unknown;
+        answers?: unknown;
       };
       setPlayerProgress({
         solved: Array.isArray(body.solved)
@@ -52,6 +54,14 @@ export default function RoomLobbyPage() {
         revealed: Array.isArray(body.revealed)
           ? body.revealed.filter((value): value is string => typeof value === "string")
           : [],
+        answers:
+          body.answers && typeof body.answers === "object"
+            ? Object.fromEntries(
+                Object.entries(body.answers as Record<string, unknown>).filter(
+                  (entry): entry is [string, string] => typeof entry[1] === "string",
+                ),
+              )
+            : {},
       });
     } catch {
       // Progress is optional for visitors without a player session.
@@ -172,6 +182,7 @@ export default function RoomLobbyPage() {
                 puzzle={puzzle}
                 roomStatus={room.status}
                 initialSolvedClues={solvedCluesMap}
+                initialAnswers={playerProgress.answers}
                 onClueSolved={handleClueSolved}
                 onClueRevealed={handleClueRevealed}
               />

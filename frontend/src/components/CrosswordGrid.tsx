@@ -5,6 +5,7 @@ import {
   KeyboardEvent,
   useCallback,
   useEffect,
+  useMemo,
   useRef,
   useState,
 } from "react";
@@ -54,6 +55,7 @@ interface CrosswordGridProps {
   roomStatus?: string;
   liveEvent?: LiveRoomEvent | null;
   initialSolvedClues?: Record<string, string>;
+  initialAnswers?: Record<string, string>;
   onClueSolved?: (clueId: string) => void;
   onClueRevealed?: (clueId: string) => void;
 }
@@ -64,10 +66,14 @@ export default function CrosswordGrid({
   roomStatus,
   liveEvent,
   initialSolvedClues = EMPTY_SOLVED_CLUES,
+  initialAnswers,
   onClueSolved,
   onClueRevealed,
 }: CrosswordGridProps) {
-  const grid = build2DGrid(puzzle.cells, puzzle.width, puzzle.height);
+  const grid = useMemo(
+    () => build2DGrid(puzzle.cells, puzzle.width, puzzle.height),
+    [puzzle.cells, puzzle.width, puzzle.height],
+  );
   const { selectedCell, currentDirection, handleCellClick, setDirection } = useCrosswordSelection();
 
   const [letters, setLetters] = useState<Record<string, string>>({});
@@ -146,6 +152,24 @@ export default function CrosswordGrid({
   useEffect(() => {
     setSolvedClues(initialSolvedClues);
   }, [initialSolvedClues]);
+
+  useEffect(() => {
+    if (!initialAnswers) return;
+    const entries = Object.entries(initialAnswers);
+    if (entries.length === 0) return;
+    setLetters((prev) => {
+      const next = { ...prev };
+      for (const [clueId, answer] of entries) {
+        const clue = puzzle.clues.find((entry) => entry.clueId === clueId);
+        if (!clue) continue;
+        cellsForClue(grid, clue).forEach((cell, index) => {
+          const char = answer[index];
+          if (char) next[cellKey(cell.row, cell.col)] = char.toUpperCase();
+        });
+      }
+      return next;
+    });
+  }, [initialAnswers, grid, puzzle.clues]);
 
   useEffect(() => {
     setFeedback(null);
@@ -470,7 +494,7 @@ export default function CrosswordGrid({
 
   const cellClass = (cell: Cell): string => {
     const base =
-      "relative flex aspect-square w-full min-w-0 items-center justify-center border text-xs font-semibold sm:text-sm";
+      "relative flex aspect-square w-full min-w-0 items-center justify-center border-2 text-xs font-semibold sm:text-sm";
     if (cell.type === "black") {
       return `${base} border-blue-500/60 bg-blue-400`;
     }

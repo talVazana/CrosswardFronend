@@ -1,3 +1,5 @@
+from contextlib import asynccontextmanager
+
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
@@ -10,8 +12,16 @@ from .api.routes.gameplay import router as gameplay_router
 from .api.routes.rooms import router as rooms_router
 from .api.routes.scores import router as scores_router
 from .api.routes.submissions import router as submissions_router
+from .services.firestore_loader import restore_state
 
-app = FastAPI()
+
+@asynccontextmanager
+async def lifespan(_app: FastAPI):
+    restore_state()
+    yield
+
+
+app = FastAPI(lifespan=lifespan)
 
 app.add_middleware(
     CORSMiddleware,

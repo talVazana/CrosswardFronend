@@ -96,7 +96,7 @@ def test_join_valid_returns_created_player(client):
     assert any(player["playerId"] == body["playerId"] for player in players)
 
 
-def test_rejoin_with_same_session_cookie_returns_existing_player_without_duplicate(client):
+def test_rejoin_with_same_session_cookie_and_new_name_creates_second_player(client):
     first = join(client)
     assert first.status_code == 200
     first_player_id = first.json()["playerId"]
@@ -104,11 +104,11 @@ def test_rejoin_with_same_session_cookie_returns_existing_player_without_duplica
 
     second = join(client, display_name="Dana Again", color="#00FF00")
     assert second.status_code == 200
-    assert second.json()["playerId"] == first_player_id
+    assert second.json()["playerId"] != first_player_id
 
     players = state(client).json()["players"]
-    assert len(players) == 1
-    assert players[0]["playerId"] == first_player_id
+    assert len(players) == 2
+    assert sorted(player["displayName"] for player in players) == ["Dana", "Dana Again"]
 
 
 def test_state_returns_title_status_and_players_without_secrets(client):

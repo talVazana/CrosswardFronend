@@ -5,6 +5,7 @@ from ...models.gameplay import PlayerClueState
 from ...models.room import RoomStatus
 from ...repositories.in_memory import InMemoryPlayerClueStateRepository
 from ...repositories.interfaces import PlayerClueStateRepository
+from ...services import firestore_publisher
 from . import rooms as rooms_module
 
 router = APIRouter()
@@ -56,6 +57,7 @@ def save_draft(roomId: str, clueId: str, body: DraftRequest, request: Request):
         state = PlayerClueState(playerId=player_id, clueId=clueId)
     state.draft = body.draft
     player_clue_state_repository.save(state, roomId)
+    firestore_publisher.publish_player_state(roomId, state)
     return {"status": "ok"}
 
 
@@ -69,12 +71,17 @@ def get_drafts(roomId: str, request: Request):
     }
 
 
-def mark_clue_scored(room_id: str, player_id: str, clue_id: str) -> None:
+def mark_clue_scored(
+    room_id: str, player_id: str, clue_id: str, solution: str = ""
+) -> None:
     state = player_clue_state_repository.get(room_id, player_id, clue_id)
     if state is None:
         state = PlayerClueState(playerId=player_id, clueId=clue_id)
     state.scored = True
+    if solution:
+        state.solution = solution
     player_clue_state_repository.save(state, room_id)
+    firestore_publisher.publish_player_state(room_id, state)
 
 
 @router.get("/rooms/{roomId}/player-progress")
@@ -85,4 +92,9 @@ def get_player_progress(roomId: str, request: Request):
     return {
         "solved": sorted(state.clueId for state in states if state.scored),
         "revealed": sorted(state.clueId for state in states if state.revealed),
+        "answers": {
+            state.clueId: state.solution
+            for state in states
+            if state.solution and (state.scored or state.revealed)
+        },
     }

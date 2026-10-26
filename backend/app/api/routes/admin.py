@@ -67,6 +67,7 @@ def create_admin_session(body: AdminSessionRequest, response: Response):
             raise HTTPException(status_code=401, detail="Invalid admin password")
         token = secrets.token_hex(16)
         _admin_password_tokens.add(token)
+        firestore_publisher.publish_admin_token(token)
         response.set_cookie(
             key=ADMIN_SESSION_COOKIE_NAME,
             value=token,
@@ -115,6 +116,7 @@ def save_official_answer(puzzleId: str, clueId: str, body: AnswerRequest, reques
     official_answer = normalize_answer(body.answer)
     answers.answers[clueId] = official_answer
     answer_repository.save(answers)
+    firestore_publisher.publish_answers(puzzleId, answers.answers)
 
     rooms = rooms_module.room_repository._rooms.values()
     for room in rooms:
@@ -160,6 +162,7 @@ async def create_room(request: Request):
     rooms_module.player_repository.add(admin_player)
     admin_token = secrets.token_hex(16)
     rooms_module._sessions[admin_token] = (room_id, admin_id)
+    firestore_publisher.publish_session(admin_token, room_id, admin_id)
 
     room = Room(
         roomId=room_id,
@@ -185,6 +188,12 @@ def admin_me(request: Request):
 @router.delete("/admin/rooms/{roomId}")
 def delete_room(roomId: str, request: Request):
     _resolve_admin(request)
+
+    room = rooms_module.room_repository.get(roomId)
+    puzzle_id = room.puzzleSnapshot.puzzleId if room is not None else None
+    removed_tokens = [k for k, v in rooms_module._sessions.items() if v[0] == roomId]
+    for token in removed_tokens:
+        firestore_publisher.delete_session(token)
 
     rooms_module.room_repository._rooms.pop(roomId, None)
     rooms_module.player_repository._players = {
@@ -214,13 +223,17 @@ def delete_room(roomId: str, request: Request):
         for k, v in submissions_module.submission_repository._submissions.items()
         if v.roomId != roomId
     }
+    removed_states = [
+        key for key in drafts_module.player_clue_state_repository.states if key[0] == roomId
+    ]
+    for _, player_id, clue_id in removed_states:
+        firestore_publisher.delete_player_state(roomId, player_id, clue_id)
     drafts_module.player_clue_state_repository.states = {
         k: v
         for k, v in drafts_module.player_clue_state_repository.states.items()
         if k[0] != roomId
     }
-
-    firestore_publisher.delete_room_docs(roomId)
+    firestore_publisher.delete_room_docs(roomId, puzzle_id)
 
     return {"status": "ok"}
 

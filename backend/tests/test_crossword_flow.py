@@ -260,15 +260,27 @@ def test_player_progress_tracks_only_that_players_solved_and_revealed_clues(env)
     approve(client)
 
     assert submit(client, TOKEN_A).json()["status"] == "correct"
-    assert progress(client, TOKEN_A) == {"solved": [CLUE_ID], "revealed": []}
-    assert progress(client, TOKEN_B) == {"solved": [], "revealed": []}
+    assert progress(client, TOKEN_A) == {
+        "solved": [CLUE_ID],
+        "revealed": [],
+        "answers": {CLUE_ID: ANSWER},
+    }
+    assert progress(client, TOKEN_B) == {"solved": [], "revealed": [], "answers": {}}
 
     as_player(client, TOKEN_B)
     reveal = client.post(f"/rooms/{ROOM_ID}/clues/{CLUE_ID}/reveal")
     assert reveal.status_code == 200, reveal.text
 
-    assert progress(client, TOKEN_B) == {"solved": [], "revealed": [CLUE_ID]}
-    assert progress(client, TOKEN_A) == {"solved": [CLUE_ID], "revealed": []}
+    assert progress(client, TOKEN_B) == {
+        "solved": [],
+        "revealed": [CLUE_ID],
+        "answers": {CLUE_ID: ANSWER},
+    }
+    assert progress(client, TOKEN_A) == {
+        "solved": [CLUE_ID],
+        "revealed": [],
+        "answers": {CLUE_ID: ANSWER},
+    }
 
 
 def test_pending_submission_counts_as_solved_only_after_admin_approval(env):
@@ -276,11 +288,15 @@ def test_pending_submission_counts_as_solved_only_after_admin_approval(env):
 
     pending = submit(client, TOKEN_A)
     assert pending.json() == {"status": "pending"}
-    assert progress(client, TOKEN_A) == {"solved": [], "revealed": []}
+    assert progress(client, TOKEN_A) == {"solved": [], "revealed": [], "answers": {}}
 
     approve(client)
 
-    assert progress(client, TOKEN_A) == {"solved": [CLUE_ID], "revealed": []}
+    assert progress(client, TOKEN_A) == {
+        "solved": [CLUE_ID],
+        "revealed": [],
+        "answers": {CLUE_ID: ANSWER},
+    }
 
 
 def test_real_puzzle_seed_includes_hebrew_display_clues():

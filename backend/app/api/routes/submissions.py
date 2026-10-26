@@ -87,7 +87,9 @@ def submit_answer(roomId: str, clueId: str, body: SubmissionRequest, request: Re
     if status != SubmissionStatus.correct:
         return {"status": status.value}
 
-    drafts_module.mark_clue_scored(roomId, player_id, clueId)
+    drafts_module.mark_clue_scored(
+        roomId, player_id, clueId, normalize_answer(body.answer)
+    )
 
     player = rooms_module.player_repository.get(roomId, player_id)
     player_role = player.role if player else "player"

@@ -22,7 +22,7 @@ ASSIGNED_PLAYER_COLORS: tuple[str, ...] = (
     "#FACC15",
     "#34D399",
     "#22D3EE",
-    "#60A5FA",
+    "#3b82f6",
     "#A78BFA",
     "#F472B6",
 )

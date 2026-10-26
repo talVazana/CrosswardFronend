@@ -2,6 +2,7 @@ from fastapi import APIRouter, HTTPException, Request
 
 from ...models.gameplay import PlayerClueState
 from ...repositories.interfaces import AnswerRepository, PlayerClueStateRepository
+from ...services import firestore_publisher
 from . import admin as admin_module
 from . import drafts as drafts_module
 from . import rooms as rooms_module
@@ -30,6 +31,8 @@ def reveal_answer(roomId: str, clueId: str, request: Request):
     if state is None:
         state = PlayerClueState(playerId=player_id, clueId=clueId)
     state.revealed = True
+    state.solution = official_answer
     player_clue_state_repository.save(state, roomId)
+    firestore_publisher.publish_player_state(roomId, state)
 
     return {"answer": official_answer}

@@ -247,7 +247,7 @@ export default function AdminCrossword({
 
   const cellClass = (cell: Cell): string => {
     const base =
-      "relative flex aspect-square w-full min-w-0 items-center justify-center border text-xs font-semibold sm:text-sm";
+      "relative flex aspect-square w-full min-w-0 items-center justify-center border-2 text-xs font-semibold sm:text-sm";
     if (cell.type === "black") return `${base} border-blue-500/60 bg-blue-400`;
     const isSelected =
       selectedCell != null && selectedCell.row === cell.row && selectedCell.col === cell.col;

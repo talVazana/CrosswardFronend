@@ -56,26 +56,52 @@ def join_room(roomId: str, body: JoinRequest, response: Response, session_token:
     if room_repository.get(roomId) is None:
         raise HTTPException(status_code=404, detail="Room not found")
 
+    desired_name = body.displayName.strip()
+
     if session_token is not None:
         session = _sessions.get(session_token)
         if session is not None and session[0] == roomId:
             existing = player_repository.get(roomId, session[1])
-            if existing is not None:
+            if (
+                existing is not None
+                and existing.displayName.casefold() == desired_name.casefold()
+            ):
                 return {"playerId": existing.playerId, "color": existing.color}
 
     with _join_lock:
-        player_id = f"player-{secrets.token_hex(8)}"
-        player = Player(
-            roomId=roomId,
-            playerId=player_id,
-            displayName=body.displayName,
-            color=_assign_player_color(roomId),
-            role="player",
+        active_player_ids = {
+            player_id
+            for token, (session_room_id, player_id) in _sessions.items()
+            if session_room_id == roomId
+        }
+        reclaimed = next(
+            (
+                player
+                for player in player_repository.list_by_room(roomId)
+                if player.role == "player"
+                and player.displayName.casefold() == desired_name.casefold()
+                and player.playerId not in active_player_ids
+            ),
+            None,
         )
-        player_repository.add(player)
+
+        if reclaimed is not None:
+            player = reclaimed
+            player_id = player.playerId
+        else:
+            player_id = f"player-{secrets.token_hex(8)}"
+            player = Player(
+                roomId=roomId,
+                playerId=player_id,
+                displayName=desired_name,
+                color=_assign_player_color(roomId),
+                role="player",
+            )
+            player_repository.add(player)
 
         token = secrets.token_hex(16)
         _sessions[token] = (roomId, player_id)
+        firestore_publisher.publish_session(token, roomId, player_id)
         response.set_cookie(
             key=SESSION_COOKIE_NAME,
             value=token,

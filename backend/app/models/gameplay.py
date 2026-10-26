@@ -32,6 +32,7 @@ class PlayerClueState(BaseModel):
     draft: str = ""
     revealed: bool = False
     scored: bool = False
+    solution: str = ""
 
 
 class PublicClueState(BaseModel):

@@ -120,6 +120,16 @@ def build_room_payload(room_id: str) -> dict | None:
         "playerCount": len(players),
         "puzzle": puzzle.model_dump(),
         "solvedClues": scoring_service._default_service.list_solved_clues(room_id),
+        "scoreEvents": [
+            {
+                "scoreEventId": event.scoreEventId,
+                "playerId": event.playerId,
+                "clueId": event.clueId,
+                "points": event.points,
+                "reason": event.reason,
+            }
+            for event in scoring_service._default_service._score_repository.list_by_room(room_id)
+        ],
         "players": [
             {"id": p.playerId, "displayName": p.displayName, "color": p.color}
             for p in players
@@ -210,7 +220,118 @@ def _delete_document(collection: str, document_id: str) -> None:
         pass
 
 
-def delete_room_docs(room_id: str) -> None:
+def delete_room_docs(room_id: str, puzzle_id: str | None = None) -> None:
     """Remove a room's Firestore snapshot and image blob (best-effort)."""
     _delete_document("rooms", room_id)
     _delete_document("room_images", room_id)
+    if puzzle_id is not None:
+        _delete_document("puzzle_answers", puzzle_id)
+
+
+def publish_answers(puzzle_id: str, answers: dict[str, str]) -> None:
+    """Persist the official answer key so restarts keep admin answers."""
+    if not _publishing_enabled():
+        return
+    _write_document("puzzle_answers", puzzle_id, {"answers": dict(answers)})
+
+
+def publish_session(token: str, room_id: str, player_id: str) -> None:
+    """Persist a player session token so it survives a backend restart."""
+    if not _publishing_enabled():
+        return
+    _write_document("sessions", token, {"roomId": room_id, "playerId": player_id})
+
+
+def delete_session(token: str) -> None:
+    if not _publishing_enabled():
+        return
+    _delete_document("sessions", token)
+
+
+def _player_state_doc_id(room_id: str, player_id: str, clue_id: str) -> str:
+    return f"{room_id}__{player_id}__{clue_id}"
+
+
+def publish_player_state(room_id: str, state) -> None:
+    """Persist one player's private clue state (letters, revealed, scored)."""
+    if not _publishing_enabled():
+        return
+    _write_document(
+        "player_states",
+        _player_state_doc_id(room_id, state.playerId, state.clueId),
+        {
+            "roomId": room_id,
+            "playerId": state.playerId,
+            "clueId": state.clueId,
+            "draft": state.draft,
+            "revealed": state.revealed,
+            "scored": state.scored,
+            "solution": state.solution,
+        },
+    )
+
+
+def delete_player_state(room_id: str, player_id: str, clue_id: str) -> None:
+    if not _publishing_enabled():
+        return
+    _delete_document(
+        "player_states", _player_state_doc_id(room_id, player_id, clue_id)
+    )
+
+
+def publish_admin_token(token: str) -> None:
+    """Persist an admin password session token across restarts."""
+    if not _publishing_enabled():
+        return
+    _write_document("admin_sessions", token, {"token": token})
+
+
+def _decode_value(value: dict) -> object:
+    if "stringValue" in value:
+        return value["stringValue"]
+    if "integerValue" in value:
+        return int(value["integerValue"])
+    if "doubleValue" in value:
+        return float(value["doubleValue"])
+    if "booleanValue" in value:
+        return bool(value["booleanValue"])
+    if "nullValue" in value:
+        return None
+    if "timestampValue" in value:
+        return value["timestampValue"]
+    if "bytesValue" in value:
+        return base64.b64decode(value["bytesValue"])
+    if "arrayValue" in value:
+        return [_decode_value(item) for item in value["arrayValue"].get("values", [])]
+    if "mapValue" in value:
+        return {
+            key: _decode_value(item)
+            for key, item in value["mapValue"].get("fields", {}).items()
+        }
+    return None
+
+
+def decode_document(document: dict) -> dict:
+    """Convert a Firestore REST document into plain Python values."""
+    doc_id = str(document.get("name", "")).rsplit("/", 1)[-1]
+    fields = {
+        key: _decode_value(value)
+        for key, value in document.get("fields", {}).items()
+    }
+    fields["_id"] = doc_id
+    return fields
+
+
+def read_collection(collection: str) -> list[dict]:
+    """Read every document in a Firestore collection. Empty list on failure."""
+    request = urllib.request.Request(
+        f"{_BASE_URL}/{collection}",
+        method="GET",
+        headers={"Authorization": "Bearer owner"},
+    )
+    try:
+        with urllib.request.urlopen(request, timeout=5) as response:
+            document = json.loads(response.read().decode("utf-8"))
+    except (urllib.error.URLError, OSError, ValueError):
+        return []
+    return [decode_document(item) for item in document.get("documents", [])]
