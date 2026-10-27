@@ -5,9 +5,9 @@ import * as fs from "fs";
 const ROOM_ID = "E2E-Room-1";
 const BACKEND_URL = process.env.E2E_BACKEND_URL ?? "http://localhost:8001";
 
-const DANA = { name: "Dana", color: "#11AA22" };
-const AMIR = { name: "Amir", color: "#3344FF" };
-const LEE = { name: "Lee", color: "#FFAA00" };
+const DANA = { name: "Dana", color: "#DC2626" };
+const AMIR = { name: "Amir", color: "#0D9488" };
+const LEE = { name: "Lee", color: "#CA8A04" };
 
 const ACROSS_CLUE = { clueId: "A7", number: 7, startCell: [3, 4] as const, answer: "WORLD" };
 const DOWN_CLUE = { clueId: "D1", number: 1, startCell: [0, 4] as const, answer: "GO" };
@@ -21,6 +21,8 @@ async function resetRoom() {
   const answers = loadFixtureJson("fixtures/puzzles/sample_official_answers.json");
   const api = await request.newContext({ baseURL: BACKEND_URL });
   try {
+    const resetRes = await api.post("/test/reset");
+    expect(resetRes.ok(), `reset should succeed: ${resetRes.status()}`).toBeTruthy();
     const res = await api.post("/e2e/seed", {
       data: { roomId: ROOM_ID, title: "E2E Room", puzzle, officialAnswers: answers, status: "active" },
     });
@@ -36,16 +38,10 @@ test.beforeEach(async () => {
   await resetRoom();
 });
 
-async function joinRoom(context: BrowserContext, displayName: string, color: string): Promise<Page> {
+async function joinRoom(context: BrowserContext, displayName: string): Promise<Page> {
   const page = await context.newPage();
   await page.goto(`/rooms/${ROOM_ID}/join`);
   await page.getByRole("textbox", { name: "Display Name" }).fill(displayName);
-  await page.locator('input[type="color"]').evaluate((input: HTMLInputElement, value) => {
-    const setter = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, "value")?.set;
-    setter?.call(input, value);
-    input.dispatchEvent(new Event("input", { bubbles: true }));
-    input.dispatchEvent(new Event("change", { bubbles: true }));
-  }, color);
   await page.getByRole("button", { name: "Join" }).click();
   await page.waitForURL(`**/rooms/${ROOM_ID}`);
   await expect(page.getByRole("heading", { name: "E2E Room" })).toBeVisible();
@@ -56,7 +52,7 @@ async function selectClue(page: Page, startCell: readonly [number, number], dire
   const [row, col] = startCell;
   await page.getByTestId(`cell-${row}-${col}`).click();
   if (direction === "down") {
-    const active = page.getByRole("heading", { name: /Across|Down/ });
+    const active = page.getByRole("heading", { level: 2, name: /Across|Down/ });
     if ((await active.textContent())?.includes("Across")) {
       await page.getByTestId(`cell-${row}-${col}`).click();
     }
@@ -64,7 +60,7 @@ async function selectClue(page: Page, startCell: readonly [number, number], dire
 }
 
 async function activeClueHeading(page: Page): Promise<string> {
-  return (await page.getByRole("heading", { name: /Across|Down/ }).textContent()) ?? "";
+  return (await page.getByRole("heading", { level: 2, name: /Across|Down/ }).textContent()) ?? "";
 }
 
 async function submitAnswer(page: Page, answer: string) {
@@ -98,8 +94,8 @@ test.describe("E2E-005 Gameplay Loop (scoring)", () => {
     const danaContext = await browser.newContext();
     const amirContext = await browser.newContext();
     try {
-      const dana = await joinRoom(danaContext, DANA.name, DANA.color);
-      const amir = await joinRoom(amirContext, AMIR.name, AMIR.color);
+      const dana = await joinRoom(danaContext, DANA.name);
+      const amir = await joinRoom(amirContext, AMIR.name);
 
       await expectScore(dana, DANA.name, 0);
       await expectScore(dana, AMIR.name, 0);
@@ -116,7 +112,7 @@ test.describe("E2E-005 Gameplay Loop (scoring)", () => {
       const [r, c] = ACROSS_CLUE.startCell;
       await expect(dana.getByTestId(`cell-${r}-${c}`)).toHaveCSS(
         "box-shadow",
-        /rgb\(17, 170, 34\)/,
+        /rgba\(220, 38, 38/,
       );
 
       await selectClue(amir, ACROSS_CLUE.startCell, "across");
@@ -130,7 +126,7 @@ test.describe("E2E-005 Gameplay Loop (scoring)", () => {
 
       await expect(amir.getByTestId(`cell-${r}-${c}`)).toHaveCSS(
         "box-shadow",
-        /rgb\(17, 170, 34\)/,
+        /rgba\(220, 38, 38/,
       );
     } finally {
       await danaContext.close();
@@ -144,8 +140,8 @@ test.describe("E2E-006 Personal Reveal", () => {
     const leeContext = await browser.newContext();
     const danaContext = await browser.newContext();
     try {
-      const lee = await joinRoom(leeContext, LEE.name, LEE.color);
-      const dana = await joinRoom(danaContext, DANA.name, DANA.color);
+      const lee = await joinRoom(leeContext, LEE.name);
+      const dana = await joinRoom(danaContext, DANA.name);
 
       await selectClue(lee, DOWN_CLUE.startCell, "down");
       expect(await activeClueHeading(lee)).toContain(`${DOWN_CLUE.number} Down`);
@@ -180,7 +176,7 @@ test.describe("E2E-007 Room Lifecycle (pause/resume)", () => {
     const danaContext = await browser.newContext();
     try {
       const admin = await loginAsAdmin(adminContext);
-      const dana = await joinRoom(danaContext, DANA.name, DANA.color);
+      const dana = await joinRoom(danaContext, DANA.name);
 
       await admin.getByRole("button", { name: "Pause" }).click();
       await expect(admin.getByText("Paused")).toBeVisible();

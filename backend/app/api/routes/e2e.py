@@ -190,3 +190,31 @@ def seed_room(body: E2ESeedRequest):
         "status": room.status.value,
         "adminSessionToken": admin_token,
     }
+
+
+@router.post("/test/reset")
+def reset_all_state():
+    """Wipe all in-memory state for test isolation."""
+    from ...repositories.in_memory import (
+        InMemoryAdminSolveRepository,
+        InMemoryPlayerIdentityRepository,
+        InMemoryPlayerTotalRepository,
+    )
+    from ...services import admin_solves, player_totals
+    from . import admin as admin_module
+    from . import drafts as drafts_module
+
+    rooms_module.room_repository._rooms.clear()
+    rooms_module.player_repository._players.clear()
+    rooms_module._sessions.clear()
+    scoring_service._default_service._score_repository._events.clear()
+    scoring_service._default_service._public_clue_states.clear()
+    submissions_module.submission_repository._submissions.clear()
+    drafts_module.player_clue_state_repository.states.clear()
+    admin_puzzles_module.puzzle_repository._puzzles.clear()
+    admin_module.answer_repository._answers.clear()
+    admin_module._admin_password_tokens.clear()
+    rooms_module.identity_repository = InMemoryPlayerIdentityRepository()
+    player_totals.repository = InMemoryPlayerTotalRepository()
+    admin_solves.repository = InMemoryAdminSolveRepository()
+    return {"status": "ok"}

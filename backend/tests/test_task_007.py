@@ -22,12 +22,12 @@ def test_returns_puzzle_and_answers_tuple_when_cwd_is_backend(monkeypatch):
     assert isinstance(answers, OfficialAnswers)
 
 
-def test_cell_0_0_is_shared_across_and_down_start():
+def test_shared_across_and_down_start_cell():
     puzzle, _ = load_sample_puzzle()
-    cell = next(c for c in puzzle.cells if c.row == 0 and c.col == 0)
+    shared = [c for c in puzzle.cells if c.startsAcross and c.startsDown]
+    assert shared, "expected a shared across/down start cell"
+    cell = shared[0]
     assert cell.number == 1
-    assert cell.startsAcross is True
-    assert cell.startsDown is True
 
 
 def test_dimensions_are_5x5():

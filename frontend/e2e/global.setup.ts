@@ -27,6 +27,11 @@ export default async function globalSetup(_config: FullConfig) {
   try {
     await waitForBackend(backend);
 
+    const resetRes = await backend.post("/test/reset");
+    if (!resetRes.ok()) {
+      throw new Error(`Failed to reset state: ${resetRes.status()}`);
+    }
+
     const puzzle = loadFixtureJson("fixtures/puzzles/valid_sample_puzzle.json");
     puzzle.puzzleId = PUZZLE_ID;
     if (puzzle.width !== 5 || puzzle.height !== 5) {

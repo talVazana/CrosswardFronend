@@ -65,13 +65,13 @@ def test_normalize_collapses_internal_whitespace():
 
 
 def test_valid_puzzle_returns_empty_list():
-    cells = with_start(white_3x3(), 0, 0, 1, starts_across=True)
+    cells = with_start(white_3x3(), 0, 2, 1, starts_across=True)
     p = puzzle(cells, [clue("A1", 1, "across", answer_length=3)])
     assert validate_puzzle_structure(p) == []
 
 
 def test_length_mismatch_names_clue():
-    cells = with_start(white_3x3(), 0, 0, 1, starts_across=True)
+    cells = with_start(white_3x3(), 0, 2, 1, starts_across=True)
     p = puzzle(cells, [clue("A1", 1, "across", answer_length=5)])
     errors = validate_puzzle_structure(p)
     combined = " ".join(errors)
