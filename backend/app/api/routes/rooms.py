@@ -22,7 +22,9 @@ from ...services.room_service import RoomService
 router = APIRouter()
 
 SESSION_COOKIE_NAME = "Session-Token"
-MAX_SESSION_TOKENS = 12
+# One cookie holds one token per room. Browsers cap a cookie near 4 KB, and each
+# token is 33 characters with its separator, so 100 rooms fits with room to spare.
+MAX_SESSION_TOKENS = 100
 
 room_repository: RoomRepository = InMemoryRoomRepository()
 player_repository: PlayerRepository = InMemoryPlayerRepository()
