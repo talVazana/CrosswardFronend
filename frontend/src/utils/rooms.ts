@@ -7,6 +7,8 @@ export interface RoomSummary {
   width: number;
   height: number;
   clueCount: number;
+  createdAt?: number;
+  updatedAt?: number;
 }
 
 export const ROOM_STATUS_LABELS: Record<string, string> = {

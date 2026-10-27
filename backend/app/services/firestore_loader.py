@@ -10,6 +10,7 @@ Restored pieces:
 - rooms and their puzzles
 - players and their colors
 - score totals and solved-clue markers
+- lifetime player totals across rooms (``player_totals`` collection)
 - official answer keys (``puzzle_answers`` collection)
 - player session tokens (``sessions`` collection)
 - admin password session tokens (``admin_sessions`` collection)
@@ -25,6 +26,20 @@ from ..models.gameplay import PublicClueState, ScoreEvent, utc_now
 from ..models.room import Player, Room, RoomStatus
 from ..models.puzzle import Puzzle
 from . import firestore_publisher
+
+
+def _restored_timestamp(value) -> "datetime":
+    """Read a stored timestamp in epoch milliseconds or ISO form."""
+    from datetime import datetime, timezone
+
+    if isinstance(value, (int, float)):
+        return datetime.fromtimestamp(value / 1000, tz=timezone.utc)
+    if isinstance(value, str):
+        try:
+            return datetime.fromisoformat(value)
+        except ValueError:
+            pass
+    return utc_now()
 
 
 def _restore_rooms() -> None:
@@ -47,12 +62,16 @@ def _restore_rooms() -> None:
         except Exception:
             continue
 
+        createdAt = _restored_timestamp(
+            document.get("createdAt") or document.get("updatedAt")
+        )
         room = Room(
             roomId=room_id,
             title=document.get("title") or "Restored room",
             status=status,
             puzzleSnapshot=puzzle,
             creatorId="restored",
+            createdAt=createdAt,
         )
         rooms_module.room_repository.create(room)
 
@@ -169,6 +188,28 @@ def _restore_sessions() -> None:
             admin_module._admin_password_tokens.add(token)
 
 
+def _restore_identities() -> None:
+    from datetime import datetime
+
+    from ..api.routes import rooms as rooms_module
+    from ..models.room import PlayerIdentity
+
+    for document in firestore_publisher.read_collection("player_identities"):
+        name_key = document.get("nameKey")
+        display_name = document.get("displayName")
+        color = document.get("color")
+        if not name_key or not display_name or not color:
+            continue
+        try:
+            created = datetime.fromisoformat(document.get("createdAt") or "")
+        except (ValueError, TypeError):
+            continue
+        rooms_module.identity_repository.save(
+            name_key,
+            PlayerIdentity(displayName=display_name, color=color, createdAt=created),
+        )
+
+
 def _restore_submissions() -> None:
     from datetime import datetime
 
@@ -224,12 +265,71 @@ def _restore_player_states() -> None:
         )
 
 
+def _restore_player_totals() -> None:
+    from datetime import datetime
+
+    from ..models.player_total import PlayerTotal
+    from ..services import player_totals
+
+    for document in firestore_publisher.read_collection("player_totals"):
+        name_key = document.get("nameKey")
+        display_name = document.get("displayName")
+        if not name_key or not display_name:
+            continue
+        try:
+            updated = datetime.fromisoformat(document.get("updatedAt") or "")
+        except (ValueError, TypeError):
+            continue
+        player_totals.repository.save(
+            name_key,
+            PlayerTotal(
+                displayName=display_name,
+                totalScore=int(document.get("totalScore") or 0),
+                updatedAt=updated,
+            ),
+        )
+
+
+def _seed_player_totals() -> None:
+    """Derive lifetime totals from stored score events when none were saved yet."""
+    from ..api.routes import rooms as rooms_module
+    from ..services import player_totals, scoring_service
+
+    earned: dict[str, tuple[str, int]] = {}
+    for room in rooms_module.room_repository.list_all():
+        events = scoring_service._default_service._score_repository.list_by_room(
+            room.roomId
+        )
+        by_player: dict[str, int] = {}
+        for event in events:
+            if event.playerId == "restored":
+                continue
+            by_player[event.playerId] = by_player.get(event.playerId, 0) + event.points
+        for player in rooms_module.player_repository.list_by_room(room.roomId):
+            if player.role != "player":
+                continue
+            points = by_player.get(player.playerId, 0)
+            if points <= 0:
+                continue
+            key = player_totals.name_key(player.displayName)
+            name, current = earned.get(key, (player.displayName, 0))
+            earned[key] = (name, current + points)
+
+    for key, (display_name, points) in earned.items():
+        if player_totals.repository.get(key) is not None:
+            continue
+        player_totals.add_points(display_name, points)
+
+
 def restore_state() -> None:
     """Rebuild in-memory state from Firestore. Safe to call once at startup."""
     if not firestore_publisher._publishing_enabled():
         return
     try:
         _restore_rooms()
+        _restore_identities()
+        _restore_player_totals()
+        _seed_player_totals()
         _restore_answers()
         _restore_sessions()
         _restore_submissions()

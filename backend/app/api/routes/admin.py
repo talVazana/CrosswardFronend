@@ -44,21 +44,31 @@ class AdminSessionRequest(BaseModel):
 
 
 def _resolve_admin(request: Request):
-    session_token = request.cookies.get(ADMIN_SESSION_COOKIE_NAME) or request.cookies.get(
-        rooms_module.SESSION_COOKIE_NAME
-    )
-    if session_token is None:
-        raise HTTPException(status_code=401, detail="Unauthorized")
-    if session_token in _admin_password_tokens:
+    admin_cookie = request.cookies.get(ADMIN_SESSION_COOKIE_NAME)
+    if admin_cookie is not None and admin_cookie in _admin_password_tokens:
         return SimpleNamespace(playerId="admin", displayName="Admin", role="admin")
-    session = rooms_module._sessions.get(session_token)
-    if session is None:
+
+    tokens: list[str] = []
+    if admin_cookie is not None:
+        tokens.append(admin_cookie)
+    tokens.extend(
+        rooms_module.split_session_tokens(
+            request.cookies.get(rooms_module.SESSION_COOKIE_NAME)
+        )
+    )
+    if not tokens:
         raise HTTPException(status_code=401, detail="Unauthorized")
-    _, player_id = session
-    player = rooms_module.player_repository.get(session[0], player_id)
-    if player is None or player.role != "admin":
+
+    for token in tokens:
+        session = rooms_module._sessions.get(token)
+        if session is None:
+            continue
+        player = rooms_module.player_repository.get(session[0], session[1])
+        if player is not None and player.role == "admin":
+            return player
+    if any(token in rooms_module._sessions for token in tokens):
         raise HTTPException(status_code=403, detail="Forbidden")
-    return player
+    raise HTTPException(status_code=401, detail="Unauthorized")
 
 
 @router.post("/admin/session")

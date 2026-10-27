@@ -9,6 +9,7 @@ from .api.routes.drafts import router as drafts_router
 from .api.routes.e2e import router as e2e_router
 from .api.routes.events import router as events_router
 from .api.routes.gameplay import router as gameplay_router
+from .api.routes.players import router as players_router
 from .api.routes.rooms import router as rooms_router
 from .api.routes.scores import router as scores_router
 from .api.routes.submissions import router as submissions_router
@@ -37,6 +38,7 @@ app.add_middleware(
 )
 
 app.include_router(rooms_router)
+app.include_router(players_router)
 app.include_router(drafts_router)
 app.include_router(admin_router)
 app.include_router(admin_puzzles_router)

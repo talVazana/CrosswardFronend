@@ -43,8 +43,8 @@ def _resolve_player(request: Request, room_id: str) -> str:
     session_token = request.cookies.get(rooms_module.SESSION_COOKIE_NAME)
     if session_token is None:
         raise HTTPException(status_code=401, detail="Unauthorized")
-    session = rooms_module._sessions.get(session_token)
-    if session is None or session[0] != room_id:
+    session = rooms_module.get_room_session(session_token, room_id)
+    if session is None:
         raise HTTPException(status_code=401, detail="Unauthorized")
     _, player_id = session
     if rooms_module.player_repository.get(room_id, player_id) is None:

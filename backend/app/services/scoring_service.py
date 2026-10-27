@@ -66,6 +66,7 @@ class ScoringService:
             timestamp=utc_now(),
         )
         self._score_repository.add_event(event)
+        self._add_lifetime_points(room_id, player_id, points)
 
         key = (room_id, clue_id)
         state = self._public_clue_states.get(key)
@@ -77,6 +78,18 @@ class ScoringService:
             state.firstSolverColor = player_color
 
         return event
+
+    def _add_lifetime_points(self, room_id: str, player_id: str, points: int) -> None:
+        """Keep the player's cross-room total in sync with each awarded score."""
+        if points <= 0:
+            return
+        from ..api.routes import rooms as rooms_module
+        from . import player_totals
+
+        player = rooms_module.player_repository.get(room_id, player_id)
+        if player is None or player.role != "player":
+            return
+        player_totals.add_points(player.displayName, points)
 
     def get_public_clue_state(self, room_id: str, clue_id: str) -> PublicClueState:
         key = (room_id, clue_id)

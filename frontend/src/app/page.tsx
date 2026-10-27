@@ -104,6 +104,8 @@ function RoomCard({
   );
 }
 
+type PlayerTotal = { displayName: string; totalScore: number };
+
 export default function Page() {
   const router = useRouter();
   const [backendStatus, setBackendStatus] = useState<
@@ -115,6 +117,8 @@ export default function Page() {
   const [roomsError, setRoomsError] = useState<string | null>(null);
   const [isAdmin, setIsAdmin] = useState(false);
   const [removingRoomId, setRemovingRoomId] = useState<string | null>(null);
+  const [totals, setTotals] = useState<PlayerTotal[]>([]);
+  const [totalsLoading, setTotalsLoading] = useState(true);
 
   const base = process.env.NEXT_PUBLIC_BACKEND_URL ?? "http://localhost:8000";
 
@@ -148,6 +152,28 @@ export default function Page() {
       .catch(() => {});
   }, [base]);
 
+  useEffect(() => {
+    let cancelled = false;
+    const loadTotals = () => {
+      fetch(`${base}/players/totals`, { credentials: "include" })
+        .then(async (res) => {
+          if (!res.ok) return;
+          const body = await res.json();
+          if (!cancelled) setTotals(body?.players ?? []);
+        })
+        .catch(() => {})
+        .finally(() => {
+          if (!cancelled) setTotalsLoading(false);
+        });
+    };
+    loadTotals();
+    const timer = window.setInterval(loadTotals, 15000);
+    return () => {
+      cancelled = true;
+      window.clearInterval(timer);
+    };
+  }, [base]);
+
   const handleRemoveRoom = async (targetRoomId: string) => {
     const confirmed = window.confirm(`Remove room ${targetRoomId}?`);
     if (!confirmed) return;
@@ -167,7 +193,11 @@ export default function Page() {
   useEffect(() => {
     const unsubscribe = subscribeRooms(
       (next) => {
-        setRooms(next);
+        const newestFirst = [...next].sort(
+          (a, b) =>
+            (b.createdAt ?? b.updatedAt ?? 0) - (a.createdAt ?? a.updatedAt ?? 0),
+        );
+        setRooms(newestFirst);
         setRoomsLoading(false);
         setRoomsError(null);
       },
@@ -265,6 +295,38 @@ export default function Page() {
             </span>
           </div>
         </div>
+      </section>
+
+      <section className="glass flex flex-col gap-3 px-6 py-5">
+        <div className="flex flex-wrap items-baseline justify-between gap-2">
+          <div>
+            <h2 className="text-xl font-semibold text-blue-900">Lifetime scores</h2>
+            <p className="muted text-sm">
+              Total points from every room. Scores stay after a room ends.
+            </p>
+          </div>
+          {totalsLoading ? <span className="muted text-xs">Loading…</span> : null}
+        </div>
+        {totals.length === 0 ? (
+          <p className="muted text-sm">No scored answers yet.</p>
+        ) : (
+          <ol className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
+            {totals.map((player, index) => (
+              <li
+                key={player.displayName}
+                className="flex items-center justify-between rounded-lg border border-blue-200/60 bg-white/70 px-3 py-2 text-sm"
+              >
+                <span className="flex items-center gap-2 font-medium text-blue-900">
+                  <span className="muted text-xs">{index + 1}</span>
+                  {player.displayName}
+                </span>
+                <span className="font-semibold text-blue-900">
+                  {player.totalScore}
+                </span>
+              </li>
+            ))}
+          </ol>
+        )}
       </section>
 
       <section className="flex flex-col gap-4">

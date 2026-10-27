@@ -2,8 +2,9 @@ from abc import ABC, abstractmethod
 
 from ..models.answers import OfficialAnswers
 from ..models.gameplay import PlayerClueState, ScoreEvent, Submission, SubmissionStatus
+from ..models.player_total import PlayerTotal
 from ..models.puzzle import Puzzle
-from ..models.room import Player, Room
+from ..models.room import Player, PlayerIdentity, Room
 
 
 class RoomRepository(ABC):
@@ -29,6 +30,28 @@ class PlayerRepository(ABC):
 
     @abstractmethod
     def list_by_room(self, room_id: str) -> list[Player]: ...
+
+
+class PlayerIdentityRepository(ABC):
+    @abstractmethod
+    def get(self, name_key: str) -> PlayerIdentity | None: ...
+
+    @abstractmethod
+    def save(self, name_key: str, identity: PlayerIdentity) -> None: ...
+
+    @abstractmethod
+    def list_all(self) -> list[PlayerIdentity]: ...
+
+
+class PlayerTotalRepository(ABC):
+    @abstractmethod
+    def get(self, name_key: str) -> PlayerTotal | None: ...
+
+    @abstractmethod
+    def save(self, name_key: str, total: PlayerTotal) -> None: ...
+
+    @abstractmethod
+    def list_all(self) -> list[PlayerTotal]: ...
 
 
 class PuzzleRepository(ABC):

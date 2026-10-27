@@ -54,12 +54,14 @@ function jsonResponse(data: unknown, status = 200) {
   } as Response;
 }
 
-function stubHealth() {
+function stubHealth(totals: { displayName: string; totalScore: number }[] = []) {
   vi.stubGlobal(
     "fetch",
     vi.fn(async (input: RequestInfo | URL) => {
-      if (String(input).endsWith("/health")) return jsonResponse({ status: "ok" });
-      throw new Error(`Unexpected fetch: ${String(input)}`);
+      const url = String(input);
+      if (url.endsWith("/health")) return jsonResponse({ status: "ok" });
+      if (url.endsWith("/players/totals")) return jsonResponse({ players: totals });
+      throw new Error(`Unexpected fetch: ${url}`);
     }),
   );
 }
@@ -125,5 +127,33 @@ describe("landing page room gallery", () => {
     emitError(new Error("network down"));
 
     expect(await screen.findByText("Could not load rooms")).toBeTruthy();
+  });
+
+  it("puts the newest room first in the gallery", async () => {
+    stubHealth();
+    render(<Page />);
+    emitRooms([
+      { ...rooms[0], createdAt: 100 },
+      { ...rooms[1], createdAt: 300 },
+    ]);
+
+    const headings = await screen.findAllByRole("heading", { level: 3 });
+    expect(headings[0].textContent).toBe("Beta");
+    expect(headings[1].textContent).toBe("Alpha");
+  });
+
+  it("shows lifetime scores from every room on the main screen", async () => {
+    stubHealth([
+      { displayName: "Amit", totalScore: 12 },
+      { displayName: "Dana", totalScore: 7 },
+    ]);
+    render(<Page />);
+    emitRooms([]);
+
+    expect(await screen.findByText("Lifetime scores")).toBeTruthy();
+    expect(await screen.findByText("Amit")).toBeTruthy();
+    expect(screen.getByText("Dana")).toBeTruthy();
+    expect(screen.getByText("12")).toBeTruthy();
+    expect(screen.getByText("7")).toBeTruthy();
   });
 });

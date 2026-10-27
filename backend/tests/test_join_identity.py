@@ -9,6 +9,7 @@ from app.repositories.in_memory import InMemoryPlayerRepository, InMemoryRoomRep
 from app.services.room_service import RoomService
 
 ROOM_ID = "test-room"
+ROOM_ID_2 = "test-room-2"
 
 
 def make_puzzle() -> Puzzle:
@@ -39,19 +40,21 @@ def make_puzzle() -> Puzzle:
     )
 
 
+def make_room(room_id: str = ROOM_ID) -> Room:
+    return Room(
+        roomId=room_id,
+        title="Test Room",
+        status=RoomStatus.active,
+        puzzleSnapshot=make_puzzle(),
+        creatorId="creator1",
+    )
+
+
 @pytest.fixture
 def client():
     room_repository = InMemoryRoomRepository()
     player_repository = InMemoryPlayerRepository()
-    room_repository.create(
-        Room(
-            roomId=ROOM_ID,
-            title="Test Room",
-            status=RoomStatus.active,
-            puzzleSnapshot=make_puzzle(),
-            creatorId="creator1",
-        )
-    )
+    room_repository.create(make_room())
 
     rooms_module.room_repository = room_repository
     rooms_module.player_repository = player_repository
@@ -129,3 +132,41 @@ def test_room_me_returns_current_player_identity(client):
 
 def test_room_me_without_session_returns_401(client):
     assert client.get(f"/rooms/{ROOM_ID}/me").status_code == 401
+
+
+def test_player_keeps_the_same_color_in_a_second_room(client):
+    rooms_module.room_repository.create(make_room(ROOM_ID_2))
+
+    first = client.post(f"/rooms/{ROOM_ID}/join", json={"displayName": "Dana"}).json()
+    second = client.post(f"/rooms/{ROOM_ID_2}/join", json={"displayName": "Dana"}).json()
+
+    assert second["color"] == first["color"]
+
+
+def test_player_has_a_working_session_in_both_rooms(client):
+    rooms_module.room_repository.create(make_room(ROOM_ID_2))
+
+    first = client.post(f"/rooms/{ROOM_ID}/join", json={"displayName": "Dana"}).json()
+    second = client.post(f"/rooms/{ROOM_ID_2}/join", json={"displayName": "Dana"}).json()
+
+    first_me = client.get(f"/rooms/{ROOM_ID}/me")
+    second_me = client.get(f"/rooms/{ROOM_ID_2}/me")
+
+    assert first_me.status_code == 200
+    assert first_me.json()["playerId"] == first["playerId"]
+    assert second_me.status_code == 200
+    assert second_me.json()["playerId"] == second["playerId"]
+
+
+def test_player_can_submit_in_both_rooms(client):
+    rooms_module.room_repository.create(make_room(ROOM_ID_2))
+    client.post(f"/rooms/{ROOM_ID}/join", json={"displayName": "Dana"})
+    client.post(f"/rooms/{ROOM_ID_2}/join", json={"displayName": "Dana"})
+
+    first = client.post(f"/rooms/{ROOM_ID}/clues/clue1/submissions", json={"answer": "A"})
+    second = client.post(
+        f"/rooms/{ROOM_ID_2}/clues/clue1/submissions", json={"answer": "A"}
+    )
+
+    assert first.status_code == 200, first.text
+    assert second.status_code == 200, second.text

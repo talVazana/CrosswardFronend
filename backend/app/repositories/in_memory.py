@@ -1,11 +1,14 @@
 from ..models.answers import OfficialAnswers
 from ..models.gameplay import PlayerClueState, ScoreEvent, Submission, SubmissionStatus
+from ..models.player_total import PlayerTotal
 from ..models.puzzle import Puzzle
-from ..models.room import Player, Room
+from ..models.room import Player, PlayerIdentity, Room
 from .interfaces import (
     AnswerRepository,
     PlayerClueStateRepository,
+    PlayerIdentityRepository,
     PlayerRepository,
+    PlayerTotalRepository,
     PuzzleRepository,
     RoomRepository,
     ScoreRepository,
@@ -42,6 +45,34 @@ class InMemoryPlayerRepository(PlayerRepository):
 
     def list_by_room(self, room_id: str) -> list[Player]:
         return [p for (rid, _), p in self._players.items() if rid == room_id]
+
+
+class InMemoryPlayerIdentityRepository(PlayerIdentityRepository):
+    def __init__(self) -> None:
+        self._identities: dict[str, PlayerIdentity] = {}
+
+    def get(self, name_key: str) -> PlayerIdentity | None:
+        return self._identities.get(name_key)
+
+    def save(self, name_key: str, identity: PlayerIdentity) -> None:
+        self._identities[name_key] = identity
+
+    def list_all(self) -> list[PlayerIdentity]:
+        return list(self._identities.values())
+
+
+class InMemoryPlayerTotalRepository(PlayerTotalRepository):
+    def __init__(self) -> None:
+        self._totals: dict[str, PlayerTotal] = {}
+
+    def get(self, name_key: str) -> PlayerTotal | None:
+        return self._totals.get(name_key)
+
+    def save(self, name_key: str, total: PlayerTotal) -> None:
+        self._totals[name_key] = total
+
+    def list_all(self) -> list[PlayerTotal]:
+        return list(self._totals.values())
 
 
 class InMemoryPuzzleRepository(PuzzleRepository):

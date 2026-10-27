@@ -21,6 +21,7 @@ import os
 import threading
 import time
 import urllib.error
+import urllib.parse
 import urllib.request
 
 FIRESTORE_EMULATOR_HOST = os.environ.get("FIRESTORE_EMULATOR_HOST", "127.0.0.1:8080")
@@ -144,6 +145,7 @@ def build_room_payload(room_id: str) -> dict | None:
             for p in players
         ],
         "updatedAt": int(time.time() * 1000),
+        "createdAt": int(room.createdAt.timestamp() * 1000),
     }
 
 
@@ -218,6 +220,38 @@ def _delete_document(collection: str, document_id: str) -> None:
         urllib.request.urlopen(request, timeout=3)
     except (urllib.error.URLError, OSError):
         pass
+
+
+def publish_player_identity(name_key: str, identity) -> None:
+    """Persist one player's name and color so every room uses the same color."""
+    if not _publishing_enabled():
+        return
+    _write_document(
+        "player_identities",
+        urllib.parse.quote(name_key, safe=""),
+        {
+            "nameKey": name_key,
+            "displayName": identity.displayName,
+            "color": identity.color,
+            "createdAt": identity.createdAt.isoformat(),
+        },
+    )
+
+
+def publish_player_total(name_key: str, total) -> None:
+    """Persist one player's lifetime score across rooms."""
+    if not _publishing_enabled():
+        return
+    _write_document(
+        "player_totals",
+        urllib.parse.quote(name_key, safe=""),
+        {
+            "nameKey": name_key,
+            "displayName": total.displayName,
+            "totalScore": total.totalScore,
+            "updatedAt": total.updatedAt.isoformat(),
+        },
+    )
 
 
 def delete_room_docs(room_id: str, puzzle_id: str | None = None) -> None:
