@@ -321,6 +321,32 @@ def _seed_player_totals() -> None:
         player_totals.add_points(display_name, points)
 
 
+def _restore_admin_solves() -> None:
+    from datetime import datetime
+
+    from ..models.admin_solve import AdminSolve
+    from ..services import admin_solves
+
+    for document in firestore_publisher.read_collection("admin_solves"):
+        room_id = document.get("roomId")
+        clue_id = document.get("clueId")
+        admin_id = document.get("adminId")
+        if not room_id or not clue_id or not admin_id:
+            continue
+        try:
+            solved_at = datetime.fromisoformat(document.get("solvedAt") or "")
+        except (ValueError, TypeError):
+            solved_at = utc_now()
+        admin_solves.repository.add(
+            AdminSolve(
+                roomId=room_id,
+                clueId=clue_id,
+                adminId=admin_id,
+                solvedAt=solved_at,
+            )
+        )
+
+
 def restore_state() -> None:
     """Rebuild in-memory state from Firestore. Safe to call once at startup."""
     if not firestore_publisher._publishing_enabled():
@@ -334,6 +360,8 @@ def restore_state() -> None:
         _restore_sessions()
         _restore_submissions()
         _restore_player_states()
+        _restore_admin_solves()
+        firestore_publisher.publish_all_rooms()
     except Exception:
         # Never block startup because the mirror is unavailable.
         pass

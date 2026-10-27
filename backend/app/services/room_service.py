@@ -68,6 +68,8 @@ class RoomService:
         totals: dict[str, int] = {}
         for event in scoring_service._default_service._score_repository.list_by_room(room_id):
             totals[event.playerId] = totals.get(event.playerId, 0) + event.points
+        from . import statistics
+
         return {
             "roomId": room.roomId,
             "id": room.roomId,
@@ -91,4 +93,5 @@ class RoomService:
                 }
                 for p in players
             ],
+            "statistics": statistics.build_statistics(room_id),
         }

@@ -38,6 +38,10 @@ function RoomCard({
   const status = room.status ?? "draft";
   const label = roomStatusLabel(status);
   const active = isRoomActive(status);
+  const [showStats, setShowStats] = useState(false);
+
+  const stats = room.statistics;
+  const statPlayers = stats?.players ?? [];
 
   return (
     <article
@@ -89,6 +93,13 @@ function RoomCard({
         <Link href={`/rooms/${room.roomId}`} className="btn-ghost text-sm">
           View
         </Link>
+        <button
+          type="button"
+          onClick={() => setShowStats(true)}
+          className="btn-ghost text-sm"
+        >
+          Statistics
+        </button>
         {canRemove ? (
           <button
             type="button"
@@ -100,6 +111,81 @@ function RoomCard({
           </button>
         ) : null}
       </div>
+
+      {showStats ? (
+        <div
+          role="dialog"
+          aria-modal="true"
+          aria-label={`Statistics for ${room.title}`}
+          className="fixed inset-0 z-50 flex items-center justify-center bg-blue-950/60 p-4 backdrop-blur-sm"
+          onClick={() => setShowStats(false)}
+        >
+          <div
+            className="glass-strong flex max-h-[90vh] w-full max-w-md flex-col gap-3 p-5"
+            onClick={(event) => event.stopPropagation()}
+          >
+            <div className="flex items-center justify-between gap-3">
+              <h3 className="text-lg font-semibold text-blue-900">
+                {room.title} — Statistics
+              </h3>
+              <button
+                type="button"
+                onClick={() => setShowStats(false)}
+                className="btn-ghost text-sm"
+              >
+                Close
+              </button>
+            </div>
+
+            {statPlayers.length === 0 ? (
+              <p className="muted text-sm">No players yet.</p>
+            ) : (
+              <ul className="flex flex-col gap-1.5" aria-label="Player statistics">
+                {statPlayers.map((player) => (
+                  <li
+                    key={player.playerId}
+                    className="flex items-center justify-between rounded-md border border-blue-200/50 bg-white/70 px-3 py-1.5 text-sm"
+                  >
+                    <span className="flex min-w-0 items-center gap-2">
+                      <span
+                        className="inline-block h-2.5 w-2.5 shrink-0 rounded-full"
+                        style={{ backgroundColor: player.color }}
+                      />
+                      <span className="truncate font-medium text-blue-900">
+                        {player.displayName}
+                      </span>
+                    </span>
+                    <span className="font-semibold text-blue-900">
+                      {player.solvedClues}
+                    </span>
+                  </li>
+                ))}
+              </ul>
+            )}
+
+            <div className="grid grid-cols-2 gap-2 border-t border-blue-200/50 pt-3">
+              <div className="glass-soft flex flex-col items-center gap-0.5 rounded-md px-3 py-2">
+                <span className="text-xs text-blue-800">Players total</span>
+                <span
+                  data-testid="stat-players-total"
+                  className="text-xl font-bold text-blue-900"
+                >
+                  {stats?.playersTotal ?? 0}
+                </span>
+              </div>
+              <div className="glass-soft flex flex-col items-center gap-0.5 rounded-md px-3 py-2">
+                <span className="text-xs text-blue-800">Admin</span>
+                <span
+                  data-testid="stat-admin-total"
+                  className="text-xl font-bold text-blue-900"
+                >
+                  {stats?.adminTotal ?? 0}
+                </span>
+              </div>
+            </div>
+          </div>
+        </div>
+      ) : null}
     </article>
   );
 }

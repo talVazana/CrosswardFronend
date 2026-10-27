@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { act, cleanup, render, screen } from "@testing-library/react";
+import { act, cleanup, render, screen, within } from "@testing-library/react";
 
 vi.mock("next/navigation", () => ({
   useRouter: () => ({ push: vi.fn() }),
@@ -157,5 +157,41 @@ describe("landing page room gallery", () => {
     expect(screen.getByText("Dana")).toBeTruthy();
     expect(screen.getByText("12")).toBeTruthy();
     expect(screen.getByText("7")).toBeTruthy();
+  });
+
+  it("opens room statistics from the card without entering the room", async () => {
+    stubHealth();
+    render(<Page />);
+    emitRooms([
+      {
+        ...rooms[0],
+        statistics: {
+          players: [
+            {
+              playerId: "p1",
+              displayName: "Dana",
+              color: "#DC2626",
+              solvedClues: 3,
+            },
+          ],
+          adminSolvedClues: 2,
+          playersTotal: 3,
+          adminTotal: 2,
+        },
+      },
+    ]);
+
+    await screen.findByText("Alpha");
+    const button = screen.getByRole("button", { name: "Statistics" });
+    button.click();
+
+    const dialog = await screen.findByRole("dialog", {
+      name: "Statistics for Alpha",
+    });
+    expect(within(dialog).getByText("Players total")).toBeTruthy();
+    expect(within(dialog).getByText("Admin")).toBeTruthy();
+    expect(within(dialog).getByText("Dana")).toBeTruthy();
+    expect(within(dialog).getByTestId("stat-players-total").textContent).toBe("3");
+    expect(within(dialog).getByTestId("stat-admin-total").textContent).toBe("2");
   });
 });

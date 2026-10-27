@@ -1,5 +1,6 @@
 from abc import ABC, abstractmethod
 
+from ..models.admin_solve import AdminSolve
 from ..models.answers import OfficialAnswers
 from ..models.gameplay import PlayerClueState, ScoreEvent, Submission, SubmissionStatus
 from ..models.player_total import PlayerTotal
@@ -104,3 +105,14 @@ class ScoreRepository(ABC):
 
     @abstractmethod
     def list_by_room(self, room_id: str) -> list[ScoreEvent]: ...
+
+
+class AdminSolveRepository(ABC):
+    @abstractmethod
+    def add(self, solve: AdminSolve) -> bool: ...
+
+    @abstractmethod
+    def list_by_room(self, room_id: str) -> list[AdminSolve]: ...
+
+    @abstractmethod
+    def remove_room(self, room_id: str) -> None: ...

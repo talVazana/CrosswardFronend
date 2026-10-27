@@ -117,6 +117,9 @@ def _reset_room(room_id: str) -> None:
     rooms_module._sessions = {
         k: v for k, v in rooms_module._sessions.items() if v[0] != room_id
     }
+    from ...services import admin_solves
+
+    admin_solves.remove_room(room_id)
 
 
 class E2ESeedRequest(BaseModel):

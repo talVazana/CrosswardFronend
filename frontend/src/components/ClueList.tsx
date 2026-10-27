@@ -6,6 +6,7 @@ interface ClueListProps {
   solvedClueIds?: ReadonlySet<string>;
   playerSolvedClueIds?: ReadonlySet<string>;
   playerRevealedClueIds?: ReadonlySet<string>;
+  submittedClueIds?: ReadonlySet<string>;
   onSelectClue?: (clue: Clue) => void;
 }
 
@@ -15,6 +16,7 @@ export default function ClueList({
   solvedClueIds,
   playerSolvedClueIds,
   playerRevealedClueIds,
+  submittedClueIds,
   onSelectClue,
 }: ClueListProps) {
   if (clues.length === 0) {
@@ -85,6 +87,17 @@ export default function ClueList({
                           <span>{clue.text}</span>
                         </span>
                       )}
+                      {submittedClueIds ? (
+                        submittedClueIds.has(clue.clueId) ? (
+                          <span className="ml-auto shrink-0 rounded-full bg-emerald-100 px-2 py-0.5 text-[10px] font-semibold text-emerald-700">
+                            Submitted
+                          </span>
+                        ) : (
+                          <span className="ml-auto shrink-0 rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-semibold text-amber-700">
+                            Draft
+                          </span>
+                        )
+                      ) : null}
                     </li>
                   );
                 })}

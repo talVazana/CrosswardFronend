@@ -1,3 +1,17 @@
+export interface PlayerStat {
+  playerId: string;
+  displayName: string;
+  color: string;
+  solvedClues: number;
+}
+
+export interface RoomStatistics {
+  players: PlayerStat[];
+  adminSolvedClues: number;
+  playersTotal: number;
+  adminTotal: number;
+}
+
 export interface RoomSummary {
   roomId: string;
   id?: string;
@@ -9,6 +23,7 @@ export interface RoomSummary {
   clueCount: number;
   createdAt?: number;
   updatedAt?: number;
+  statistics?: RoomStatistics;
 }
 
 export const ROOM_STATUS_LABELS: Record<string, string> = {

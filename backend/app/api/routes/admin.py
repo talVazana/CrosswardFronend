@@ -133,6 +133,9 @@ def save_official_answer(puzzleId: str, clueId: str, body: AnswerRequest, reques
     for room in rooms:
         if room.puzzleSnapshot.puzzleId == puzzleId:
             reconcile_pending_submissions(room.roomId, clueId, official_answer)
+            from ...services import admin_solves
+
+            admin_solves.record_first_solve(room.roomId, clueId, admin.playerId)
             firestore_publisher.publish_room(room.roomId)
 
     return {"status": "ok"}
@@ -234,6 +237,9 @@ def delete_room(roomId: str, request: Request):
         for k, v in submissions_module.submission_repository._submissions.items()
         if v.roomId != roomId
     }
+    from ...services import admin_solves
+
+    admin_solves.remove_room(roomId)
     removed_states = [
         key for key in drafts_module.player_clue_state_repository.states if key[0] == roomId
     ]
@@ -290,6 +296,8 @@ def get_admin_room_state(roomId: str, request: Request):
         for player in players
     ]
     answers = answer_repository.get(room.puzzleSnapshot.puzzleId)
+    from ...services import statistics
+
     return {
         "roomId": room.roomId,
         "id": room.roomId,
@@ -313,6 +321,7 @@ def get_admin_room_state(roomId: str, request: Request):
             for s in submissions_module.submission_repository.list_pending_by_room(roomId)
         ],
         "scores": scores,
+        "statistics": statistics.build_statistics(roomId),
     }
 
 

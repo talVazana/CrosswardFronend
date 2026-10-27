@@ -270,6 +270,7 @@ export default function AdminRoomDashboardPage() {
       ? puzzle.displayClues
       : puzzle?.clues ?? [];
   const solvedClueIds = new Set(Object.keys(solvedClues));
+  const submittedClueIds = new Set(Object.keys(room?.officialAnswers ?? {}));
 
   return (
     <main className="mx-auto flex min-h-screen w-full max-w-3xl flex-col gap-6 p-6">
@@ -368,7 +369,11 @@ export default function AdminRoomDashboardPage() {
           {displayClues.length > 0 ? (
             <section className="glass flex flex-col gap-2 px-6 py-4">
               <h2 className="text-lg font-semibold text-blue-800">Clues</h2>
-              <ClueList clues={displayClues} solvedClueIds={solvedClueIds} />
+              <ClueList
+                clues={displayClues}
+                solvedClueIds={solvedClueIds}
+                submittedClueIds={submittedClueIds}
+              />
             </section>
           ) : null}
 

@@ -1,9 +1,11 @@
+from ..models.admin_solve import AdminSolve
 from ..models.answers import OfficialAnswers
 from ..models.gameplay import PlayerClueState, ScoreEvent, Submission, SubmissionStatus
 from ..models.player_total import PlayerTotal
 from ..models.puzzle import Puzzle
 from ..models.room import Player, PlayerIdentity, Room
 from .interfaces import (
+    AdminSolveRepository,
     AnswerRepository,
     PlayerClueStateRepository,
     PlayerIdentityRepository,
@@ -156,3 +158,25 @@ class InMemoryScoreRepository(ScoreRepository):
 
     def list_by_room(self, room_id: str) -> list[ScoreEvent]:
         return [e for e in self._events.values() if e.roomId == room_id]
+
+
+class InMemoryAdminSolveRepository(AdminSolveRepository):
+    def __init__(self) -> None:
+        self._solves: dict[tuple[str, str], AdminSolve] = {}
+
+    def add(self, solve: AdminSolve) -> bool:
+        key = (solve.roomId, solve.clueId)
+        if key in self._solves:
+            return False
+        self._solves[key] = solve
+        return True
+
+    def list_by_room(self, room_id: str) -> list[AdminSolve]:
+        return [s for (rid, _), s in self._solves.items() if rid == room_id]
+
+    def remove_room(self, room_id: str) -> None:
+        self._solves = {
+            key: solve
+            for key, solve in self._solves.items()
+            if key[0] != room_id
+        }

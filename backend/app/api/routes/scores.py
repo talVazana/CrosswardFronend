@@ -38,3 +38,13 @@ def get_room_scores(roomId: str):
     ]
     scores.sort(key=lambda s: (-s["totalPoints"], s["displayName"]))
     return scores
+
+
+@router.get("/rooms/{roomId}/statistics")
+def get_room_statistics(roomId: str):
+    if rooms_module.room_repository.get(roomId) is None:
+        raise HTTPException(status_code=404, detail="Room not found")
+
+    from ...services import statistics
+
+    return statistics.build_statistics(roomId)
