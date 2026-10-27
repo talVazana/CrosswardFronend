@@ -38,10 +38,19 @@ def add_points(display_name: str, points: int) -> PlayerTotal | None:
 
 
 def leaderboard() -> list[dict]:
+    from ..api.routes import rooms as rooms_module
+
     totals = sorted(
         repository.list_all(), key=lambda total: (-total.totalScore, total.displayName)
     )
-    return [
-        {"displayName": total.displayName, "totalScore": total.totalScore}
-        for total in totals
-    ]
+    entries = []
+    for total in totals:
+        identity = rooms_module.identity_repository.get(name_key(total.displayName))
+        entries.append(
+            {
+                "displayName": total.displayName,
+                "totalScore": total.totalScore,
+                "color": identity.color if identity is not None else None,
+            }
+        )
+    return entries

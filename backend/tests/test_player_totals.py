@@ -143,8 +143,12 @@ def test_leaderboard_sorts_by_total_score(client):
 
     assert response.status_code == 200
     players = response.json()["players"]
-    assert players[0] == {"displayName": "Amit", "totalScore": 2}
-    assert players[1] == {"displayName": "Dana", "totalScore": 2}
+    assert players[0]["displayName"] == "Amit"
+    assert players[0]["totalScore"] == 2
+    assert players[0]["color"] == "#0D9488"
+    assert players[1]["displayName"] == "Dana"
+    assert players[1]["totalScore"] == 2
+    assert players[1]["color"] == "#DC2626"
 
 
 def test_unknown_name_has_zero_total(client):

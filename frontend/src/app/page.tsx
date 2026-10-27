@@ -104,7 +104,11 @@ function RoomCard({
   );
 }
 
-type PlayerTotal = { displayName: string; totalScore: number };
+type PlayerTotal = {
+  displayName: string;
+  totalScore: number;
+  color?: string | null;
+};
 
 export default function Page() {
   const router = useRouter();
@@ -310,15 +314,20 @@ export default function Page() {
         {totals.length === 0 ? (
           <p className="muted text-sm">No scored answers yet.</p>
         ) : (
-          <ol className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
-            {totals.map((player, index) => (
+          <ol className="grid gap-1.5 sm:grid-cols-3 lg:grid-cols-4">
+            {totals.map((player) => (
               <li
                 key={player.displayName}
-                className="flex items-center justify-between rounded-lg border border-blue-200/60 bg-white/70 px-3 py-2 text-sm"
+                className="flex items-center justify-between gap-2 rounded-md border border-blue-200/50 bg-white/60 px-2 py-1 text-xs"
               >
-                <span className="flex items-center gap-2 font-medium text-blue-900">
-                  <span className="muted text-xs">{index + 1}</span>
-                  {player.displayName}
+                <span className="flex min-w-0 items-center gap-1.5">
+                  <span
+                    className="inline-block h-2 w-2 shrink-0 rounded-full"
+                    style={{ backgroundColor: player.color ?? "#94A3B8" }}
+                  />
+                  <span className="truncate font-medium text-blue-900">
+                    {player.displayName}
+                  </span>
                 </span>
                 <span className="font-semibold text-blue-900">
                   {player.totalScore}

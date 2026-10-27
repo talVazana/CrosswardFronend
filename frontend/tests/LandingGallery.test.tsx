@@ -54,7 +54,9 @@ function jsonResponse(data: unknown, status = 200) {
   } as Response;
 }
 
-function stubHealth(totals: { displayName: string; totalScore: number }[] = []) {
+function stubHealth(
+  totals: { displayName: string; totalScore: number; color?: string }[] = [],
+) {
   vi.stubGlobal(
     "fetch",
     vi.fn(async (input: RequestInfo | URL) => {
@@ -144,8 +146,8 @@ describe("landing page room gallery", () => {
 
   it("shows lifetime scores from every room on the main screen", async () => {
     stubHealth([
-      { displayName: "Amit", totalScore: 12 },
-      { displayName: "Dana", totalScore: 7 },
+      { displayName: "Amit", totalScore: 12, color: "#0D9488" },
+      { displayName: "Dana", totalScore: 7, color: "#DC2626" },
     ]);
     render(<Page />);
     emitRooms([]);
