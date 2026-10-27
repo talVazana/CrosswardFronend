@@ -24,6 +24,64 @@ function backendTone(status: "checking" | "connected" | "offline"): string {
   return "border-blue-300/70 bg-blue-100/70 text-blue-800";
 }
 
+function EyeIcon() {
+  return (
+    <svg
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      className="h-5 w-5"
+      aria-hidden="true"
+    >
+      <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z" />
+      <circle cx="12" cy="12" r="3" />
+    </svg>
+  );
+}
+
+function ChartIcon() {
+  return (
+    <svg
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      className="h-5 w-5"
+      aria-hidden="true"
+    >
+      <line x1="6" y1="20" x2="6" y2="12" />
+      <line x1="12" y1="20" x2="12" y2="4" />
+      <line x1="18" y1="20" x2="18" y2="8" />
+    </svg>
+  );
+}
+
+function TrashIcon() {
+  return (
+    <svg
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      className="h-5 w-5"
+      aria-hidden="true"
+    >
+      <polyline points="3 6 5 6 21 6" />
+      <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />
+    </svg>
+  );
+}
+
+const ICON_BUTTON =
+  "inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-md border border-blue-200/60 bg-white/70 text-blue-700 hover:bg-blue-100 disabled:opacity-50";
+
 function RoomCard({
   room,
   canRemove,
@@ -86,28 +144,40 @@ function RoomCard({
         </div>
       </dl>
 
-      <div className="mt-auto flex gap-2">
-        <Link href={`/rooms/${room.roomId}/join`} className="btn-primary flex-1 text-sm">
+      <div className="mt-auto flex items-center gap-2">
+        <Link
+          href={`/rooms/${room.roomId}/join`}
+          className="btn-primary flex-1 text-sm"
+        >
           Join room
         </Link>
-        <Link href={`/rooms/${room.roomId}`} className="btn-ghost text-sm">
-          View
+        <Link
+          href={`/rooms/${room.roomId}`}
+          aria-label="View room"
+          title="View room"
+          className={ICON_BUTTON}
+        >
+          <EyeIcon />
         </Link>
         <button
           type="button"
           onClick={() => setShowStats(true)}
-          className="btn-ghost text-sm"
+          aria-label="Statistics"
+          title="Statistics"
+          className={ICON_BUTTON}
         >
-          Statistics
+          <ChartIcon />
         </button>
         {canRemove ? (
           <button
             type="button"
             onClick={() => onRemove(room.roomId)}
             disabled={removing}
-            className="rounded border border-rose-300 bg-white px-3 py-1 text-sm font-medium text-rose-700 hover:bg-rose-100 disabled:opacity-50"
+            aria-label="Remove room"
+            title="Remove room"
+            className={`${ICON_BUTTON} text-rose-700 hover:bg-rose-100`}
           >
-            Remove
+            <TrashIcon />
           </button>
         ) : null}
       </div>
