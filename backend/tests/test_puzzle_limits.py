@@ -177,3 +177,20 @@ def test_quota_fails_closed_when_the_day_is_full(monkeypatch):
     gemini_quota.check_and_record()
     with pytest.raises(gemini_quota.QuotaExceeded, match="daily"):
         gemini_quota.check_and_record()
+
+def test_restore_quota_keeps_only_recent_timestamps():
+    now = time.time()
+    gemini_quota.reset_quota()
+    gemini_quota.restore_quota(
+        [
+            now - 10,
+            now - 3600 * 2,
+            now - 3600 * 25,
+            now + 5,
+            "not-a-number",
+        ]
+    )
+
+    usage = gemini_quota.usage()
+    assert usage["lastHour"] == 1
+    assert usage["lastDay"] == 2

@@ -27,10 +27,32 @@ import urllib.request
 FIRESTORE_EMULATOR_HOST = os.environ.get("FIRESTORE_EMULATOR_HOST", "127.0.0.1:8080")
 FIRESTORE_PROJECT_ID = os.environ.get("FIRESTORE_PROJECT_ID", "demo-crossword-arena")
 
-_BASE_URL = (
-    f"http://{FIRESTORE_EMULATOR_HOST}"
-    f"/v1/projects/{FIRESTORE_PROJECT_ID}/databases/(default)/documents"
-)
+
+def _production_mode() -> bool:
+    return os.environ.get("FIRESTORE_MODE", "").strip().lower() == "production"
+
+
+def _base_url() -> str:
+    if _production_mode():
+        return (
+            "https://firestore.googleapis.com/v1/projects"
+            f"/{FIRESTORE_PROJECT_ID}/databases/(default)/documents"
+        )
+    return (
+        f"http://{FIRESTORE_EMULATOR_HOST}"
+        f"/v1/projects/{FIRESTORE_PROJECT_ID}/databases/(default)/documents"
+    )
+
+
+def _auth_headers() -> dict[str, str]:
+    if not _production_mode():
+        return {"Authorization": "Bearer owner"}
+    from google.auth import default as google_default
+    from google.auth.transport.requests import Request as GoogleRequest
+
+    credentials, _ = google_default()
+    credentials.refresh(GoogleRequest())
+    return {"Authorization": f"Bearer {credentials.token}"}
 
 
 def _publishing_enabled() -> bool:
@@ -70,7 +92,7 @@ def _write_document(collection: str, document_id: str, data: dict) -> None:
     field_paths = "&".join(
         f"updateMask.fieldPaths={key}" for key in fields.keys()
     )
-    url = f"{_BASE_URL}/{collection}/{document_id}?{field_paths}"
+    url = f"{_base_url()}/{collection}/{document_id}?{field_paths}"
 
     request = urllib.request.Request(
         url,
@@ -78,7 +100,7 @@ def _write_document(collection: str, document_id: str, data: dict) -> None:
         method="PATCH",
         headers={
             "Content-Type": "application/json",
-            "Authorization": "Bearer owner",
+            **_auth_headers(),
         },
     )
     try:
@@ -196,11 +218,11 @@ def publish_room_image(
 
 def get_room_image(room_id: str) -> tuple[bytes, str] | None:
     """Read the source crossword image blob for a room."""
-    url = f"{_BASE_URL}/room_images/{room_id}"
+    url = f"{_base_url()}/room_images/{room_id}"
     request = urllib.request.Request(
         url,
         method="GET",
-        headers={"Authorization": "Bearer owner"},
+        headers=_auth_headers(),
     )
     try:
         with urllib.request.urlopen(request, timeout=5) as response:
@@ -217,11 +239,11 @@ def get_room_image(room_id: str) -> tuple[bytes, str] | None:
 
 
 def _delete_document(collection: str, document_id: str) -> None:
-    url = f"{_BASE_URL}/{collection}/{document_id}"
+    url = f"{_base_url()}/{collection}/{document_id}"
     request = urllib.request.Request(
         url,
         method="DELETE",
-        headers={"Authorization": "Bearer owner"},
+        headers=_auth_headers(),
     )
     try:
         urllib.request.urlopen(request, timeout=3)
@@ -393,6 +415,17 @@ def publish_profile(email: str, nickname: str) -> None:
     )
 
 
+def publish_gemini_quota(timestamps: list[float]) -> None:
+    """Persist Gemini extraction timestamps so quotas survive a restart."""
+    if not _publishing_enabled():
+        return
+    _write_document(
+        "quota",
+        "gemini",
+        {"timestamps": [float(stamp) for stamp in timestamps]},
+    )
+
+
 def _decode_value(value: dict) -> object:
     if "stringValue" in value:
         return value["stringValue"]
@@ -432,9 +465,9 @@ def decode_document(document: dict) -> dict:
 def read_collection(collection: str) -> list[dict]:
     """Read every document in a Firestore collection. Empty list on failure."""
     request = urllib.request.Request(
-        f"{_BASE_URL}/{collection}",
+        f"{_base_url()}/{collection}",
         method="GET",
-        headers={"Authorization": "Bearer owner"},
+        headers=_auth_headers(),
     )
     try:
         with urllib.request.urlopen(request, timeout=5) as response:

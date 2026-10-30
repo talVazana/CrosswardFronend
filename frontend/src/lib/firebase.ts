@@ -34,7 +34,9 @@ export function getDb(): Firestore {
   }
   const app = getFirebaseApp();
   const db = getFirestore(app);
-  connectFirestoreEmulator(db, emulatorHost, emulatorPort);
+  if (process.env.NEXT_PUBLIC_FIRESTORE_EMULATOR_HOST) {
+    connectFirestoreEmulator(db, emulatorHost, emulatorPort);
+  }
   firestoreInstance = db;
   return db;
 }

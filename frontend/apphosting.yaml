@@ -1,0 +1,11 @@
+env:
+  - variable: NEXT_PUBLIC_BACKEND_URL
+    value: https://crossward-backend-743087313809.me-west1.run.app
+  - variable: NEXT_PUBLIC_FIREBASE_PROJECT_ID
+    value: crossward-arena-tal
+  - variable: NEXT_PUBLIC_FIREBASE_API_KEY
+    value: AIzaSyD_JaBMKWhrPTnaD7JcSymh-U4w8MOqDzc
+  - variable: NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN
+    value: crossward-arena-tal.firebaseapp.com
+  - variable: NEXT_PUBLIC_FIREBASE_APP_ID
+    value: 1:743087313809:web:065581b4af42b05c4e8030

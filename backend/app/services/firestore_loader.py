@@ -26,6 +26,7 @@ from ..models.gameplay import PublicClueState, ScoreEvent, utc_now
 from ..models.room import Player, Room, RoomStatus
 from ..models.puzzle import Puzzle
 from . import firestore_publisher
+from . import gemini_quota
 from . import limits as limits_module
 from . import profiles as profiles_module
 from .. import special_users
@@ -382,6 +383,16 @@ def _restore_profiles() -> None:
         profiles_module.restore_profiles(mapping)
 
 
+def _restore_quota() -> None:
+    """Apply saved Gemini extraction timestamps."""
+    for document in firestore_publisher.read_collection("quota"):
+        if document.get("_id") != "gemini":
+            continue
+        timestamps = document.get("timestamps")
+        if isinstance(timestamps, list):
+            gemini_quota.restore_quota(timestamps)
+
+
 def restore_state() -> None:
     """Rebuild in-memory state from Firestore. Safe to call once at startup."""
     if not firestore_publisher._publishing_enabled():
@@ -399,6 +410,7 @@ def restore_state() -> None:
         _restore_god_settings()
         _restore_special_users()
         _restore_profiles()
+        _restore_quota()
         firestore_publisher.publish_all_rooms()
     except Exception:
         # Never block startup because the mirror is unavailable.

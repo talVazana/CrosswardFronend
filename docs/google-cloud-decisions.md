@@ -4,6 +4,20 @@ Status: decisions recorded only. Implementation not started.
 
 Implementation plan: `docs/google-cloud-setup.md`.
 
+## Provisioned 2026-10-30
+
+- Project: `crossward-arena-tal` (number `743087313809`), ACTIVE, billing enabled.
+- Billing account: `0132A6-61C62F-0A0F79`.
+- Firestore: `me-west1`, Native mode, `(default)` database, free tier.
+- APIs enabled: firestore, identitytoolkit, run, cloudbuild, artifactregistry,
+  secretmanager, firebase, firebaseapphosting.
+- Firebase web app: `Crossword Arena`.
+  - appId: `1:743087313809:web:065581b4af42b05c4e8030`
+  - apiKey: `AIzaSyD_JaBMKWhrPTnaD7JcSymh-U4w8MOqDzc`
+  - authDomain: `crossward-arena-tal.firebaseapp.com`
+  - messagingSenderId / projectNumber: `743087313809`
+- Firestore rules and indexes deployed.
+
 Date: 2026-10-29
 
 ## Target stack

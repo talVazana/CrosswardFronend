@@ -14,6 +14,7 @@ import threading
 import time
 from collections import deque
 
+from . import firestore_publisher
 from .limits import get_limits
 
 _HOUR = 3600.0
@@ -32,6 +33,10 @@ def _prune(now: float) -> None:
         _events.popleft()
 
 
+def _persist() -> None:
+    firestore_publisher.publish_gemini_quota(list(_events))
+
+
 def check_and_record() -> None:
     """Reserve one extraction. Raises ``QuotaExceeded`` when the quota is full."""
     limits = get_limits()
@@ -48,6 +53,7 @@ def check_and_record() -> None:
                 f"Gemini daily limit reached ({limits.gemini_max_per_day} jobs)"
             )
         _events.append(now)
+    _persist()
 
 
 def usage() -> dict[str, int]:
@@ -69,3 +75,20 @@ def usage() -> dict[str, int]:
 def reset_quota() -> None:
     with _lock:
         _events.clear()
+    _persist()
+
+
+def restore_quota(timestamps: list[float]) -> None:
+    """Apply saved extraction timestamps, dropping anything older than a day."""
+    now = time.time()
+    valid: list[float] = []
+    for stamp in timestamps:
+        try:
+            value = float(stamp)
+        except (TypeError, ValueError):
+            continue
+        if 0 < now - value <= _DAY:
+            valid.append(value)
+    with _lock:
+        _events.clear()
+        _events.extend(sorted(valid))
