@@ -130,8 +130,10 @@ export default function GodPage() {
         return;
       }
       await unlock(candidate);
-    } catch {
-      setError("Network error while signing in.");
+    } catch (err) {
+      setError(
+        err instanceof Error ? err.message : "Network error while signing in.",
+      );
     } finally {
       setSigningIn(false);
     }

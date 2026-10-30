@@ -21,7 +21,7 @@ function getFirebaseApp(): FirebaseApp {
   return initializeApp({
     projectId,
     apiKey: process.env.NEXT_PUBLIC_FIREBASE_API_KEY ?? "demo-api-key",
-    authDomain: process.env.NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN,
+    authDomain: process.env.NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN ?? "localhost",
     appId: process.env.NEXT_PUBLIC_FIREBASE_APP_ID,
   });
 }
