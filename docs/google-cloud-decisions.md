@@ -13,7 +13,6 @@ Implementation plan: `docs/google-cloud-setup.md`.
   secretmanager, firebase, firebaseapphosting.
 - Firebase web app: `Crossword Arena`.
   - appId: `1:743087313809:web:065581b4af42b05c4e8030`
-  - apiKey: `AIzaSyD_JaBMKWhrPTnaD7JcSymh-U4w8MOqDzc`
   - authDomain: `crossward-arena-tal.firebaseapp.com`
   - messagingSenderId / projectNumber: `743087313809`
 - Firestore rules and indexes deployed.
