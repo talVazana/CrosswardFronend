@@ -7,7 +7,7 @@ import EmptyState from "@/components/ui/EmptyState";
 import ErrorMessage from "@/components/ui/ErrorMessage";
 import LoadingSpinner from "@/components/ui/LoadingSpinner";
 import { subscribeRooms } from "@/lib/roomsStore";
-import { getIdToken, getProfile, onAuthChange, signInWithGoogle, signOutGoogle } from "@/lib/auth";
+import { getIdToken, getProfile, onAuthChange, saveProfile, signInWithGoogle, signOutGoogle } from "@/lib/auth";
 import {
   RoomSummary,
   isRoomActive,
@@ -280,6 +280,8 @@ export default function Page() {
   const [isGod, setIsGod] = useState(false);
   const [signedIn, setSignedIn] = useState(false);
   const [nickname, setNickname] = useState<string | null>(null);
+  const [nicknameDraft, setNicknameDraft] = useState("");
+  const [savingNickname, setSavingNickname] = useState(false);
   const [removingRoomId, setRemovingRoomId] = useState<string | null>(null);
   const [totals, setTotals] = useState<PlayerTotal[]>([]);
   const [totalsLoading, setTotalsLoading] = useState(true);
@@ -405,6 +407,22 @@ export default function Page() {
     if (id) router.push(`/rooms/${id}/join`);
   };
 
+  const saveNickname = async (e: FormEvent<HTMLFormElement>) => {
+    e.preventDefault();
+    const value = nicknameDraft.trim();
+    if (value.length < 2) return;
+    setSavingNickname(true);
+    try {
+      const profile = await saveProfile(value);
+      setNickname(profile.nickname);
+      setNicknameDraft("");
+    } catch {
+      // keep the prompt; the user can retry
+    } finally {
+      setSavingNickname(false);
+    }
+  };
+
   const activeRooms = rooms.filter((room) => isRoomActive(room.status)).length;
   const backendLabel =
     backendStatus === "checking"
@@ -466,6 +484,34 @@ export default function Page() {
           )}
         </div>
       </header>
+
+      {signedIn && nickname === null ? (
+        <section className="glass flex flex-wrap items-center gap-3 px-6 py-4">
+          <div className="flex flex-col gap-1">
+            <h2 className="text-lg font-semibold text-blue-900">Choose a nickname</h2>
+            <p className="muted text-xs">
+              This is the name shown to other players.
+            </p>
+          </div>
+          <form onSubmit={saveNickname} className="flex flex-1 flex-col gap-2 sm:flex-row">
+            <input
+              type="text"
+              value={nicknameDraft}
+              onChange={(e) => setNicknameDraft(e.target.value)}
+              className="input flex-1"
+              placeholder="Your nickname"
+              maxLength={20}
+            />
+            <button
+              type="submit"
+              disabled={savingNickname || nicknameDraft.trim().length < 2}
+              className="btn-primary text-sm"
+            >
+              {savingNickname ? "Saving..." : "Save nickname"}
+            </button>
+          </form>
+        </section>
+      ) : null}
 
       <section className="glass grid gap-6 px-6 py-8 md:grid-cols-[1.5fr_1fr]">
         <div className="flex flex-col gap-4">

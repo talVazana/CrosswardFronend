@@ -2,6 +2,7 @@ import {
   GoogleAuthProvider,
   getRedirectResult,
   onAuthStateChanged,
+  signInWithPopup,
   signInWithRedirect,
   signOut,
   type User,
@@ -21,8 +22,24 @@ function consumeRedirectResult(): void {
 }
 
 export async function signInWithGoogle(): Promise<void> {
-  // Redirect always, so sign-in works even when the browser blocks popups.
-  await signInWithRedirect(getFirebaseAuth(), new GoogleAuthProvider());
+  const auth = getFirebaseAuth();
+  const provider = new GoogleAuthProvider();
+  try {
+    // Popup works cross-origin and is the reliable path on App Hosting.
+    await signInWithPopup(auth, provider);
+  } catch (error) {
+    const code = (error as { code?: string })?.code;
+    if (
+      code === "auth/popup-blocked" ||
+      code === "auth/cancelled-popup-request" ||
+      code === "auth/popup-closed-by-user"
+    ) {
+      // Fall back to redirect when the browser blocks popups.
+      await signInWithRedirect(auth, provider);
+      return;
+    }
+    throw error;
+  }
 }
 
 export async function getIdToken(): Promise<string | null> {
