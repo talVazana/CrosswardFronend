@@ -4,17 +4,25 @@ export function getRoomSessionToken(roomId: string): string | null {
   if (typeof window === "undefined") {
     return null;
   }
-  return window.sessionStorage.getItem(STORAGE_PREFIX + roomId);
+  try {
+    return window.sessionStorage.getItem(STORAGE_PREFIX + roomId);
+  } catch {
+    return null;
+  }
 }
 
 export function setRoomSessionToken(roomId: string, token: string | null): void {
   if (typeof window === "undefined") {
     return;
   }
-  if (token) {
-    window.sessionStorage.setItem(STORAGE_PREFIX + roomId, token);
-  } else {
-    window.sessionStorage.removeItem(STORAGE_PREFIX + roomId);
+  try {
+    if (token) {
+      window.sessionStorage.setItem(STORAGE_PREFIX + roomId, token);
+    } else {
+      window.sessionStorage.removeItem(STORAGE_PREFIX + roomId);
+    }
+  } catch {
+    // Storage can be unavailable in hardened/private browsing modes.
   }
 }
 
