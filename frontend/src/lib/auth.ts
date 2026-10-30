@@ -1,7 +1,7 @@
 import {
   GoogleAuthProvider,
+  getRedirectResult,
   onAuthStateChanged,
-  signInWithPopup,
   signInWithRedirect,
   signOut,
   type User,
@@ -10,25 +10,19 @@ import { getFirebaseAuth } from "./firebase";
 
 const base = process.env.NEXT_PUBLIC_BACKEND_URL ?? "http://localhost:8000";
 
-export async function signInWithGoogle(): Promise<void> {
-  const auth = getFirebaseAuth();
-  const provider = new GoogleAuthProvider();
-  try {
-    await signInWithPopup(auth, provider);
-  } catch (error) {
-    const code = (error as { code?: string })?.code;
-    if (
-      code === "auth/popup-blocked" ||
-      code === "auth/cancelled-popup-request" ||
-      code === "auth/popup-closed-by-user"
-    ) {
-      // Popup is blocked; redirect instead. The page reloads and
-      // onAuthChange picks up the signed-in user.
-      await signInWithRedirect(auth, provider);
-      return;
-    }
-    throw error;
+let redirectResultConsumed = false;
+
+function consumeRedirectResult(): void {
+  if (redirectResultConsumed) {
+    return;
   }
+  redirectResultConsumed = true;
+  getRedirectResult(getFirebaseAuth()).catch(() => {});
+}
+
+export async function signInWithGoogle(): Promise<void> {
+  // Redirect always, so sign-in works even when the browser blocks popups.
+  await signInWithRedirect(getFirebaseAuth(), new GoogleAuthProvider());
 }
 
 export async function getIdToken(): Promise<string | null> {
@@ -40,6 +34,7 @@ export async function getIdToken(): Promise<string | null> {
 }
 
 export function onAuthChange(callback: (user: User | null) => void) {
+  consumeRedirectResult();
   return onAuthStateChanged(getFirebaseAuth(), callback);
 }
 
