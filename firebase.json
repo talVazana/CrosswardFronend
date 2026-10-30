@@ -1,4 +1,20 @@
 {
+  "apphosting": [
+    {
+      "backendId": "crossward-frontend",
+      "rootDir": "frontend",
+      "ignore": [
+        "backend",
+        "docs",
+        "fixtures",
+        "scripts",
+        "test",
+        ".firebase",
+        ".agentic_pipeline_tmp",
+        "*.log"
+      ]
+    }
+  ],
   "firestore": {
     "rules": "firestore.rules",
     "indexes": "firestore.indexes.json"

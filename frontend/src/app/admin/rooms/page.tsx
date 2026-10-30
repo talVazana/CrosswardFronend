@@ -6,7 +6,7 @@ import { useRouter } from "next/navigation";
 import EmptyState from "@/components/ui/EmptyState";
 import ErrorMessage from "@/components/ui/ErrorMessage";
 import LoadingSpinner from "@/components/ui/LoadingSpinner";
-import { getIdToken, signInWithGoogle } from "@/lib/auth";
+import { getIdToken, onAuthChange, signInWithGoogle } from "@/lib/auth";
 import {
   RoomSummary,
   isRoomActive,
@@ -119,29 +119,45 @@ export default function AdminRoomsPage() {
     void loadRooms();
   }, [loadRooms]);
 
+  const completeSignIn = useCallback(async () => {
+    const token = await getIdToken();
+    if (!token) {
+      setSignInError("Sign-in did not return a token.");
+      return;
+    }
+    const res = await fetch(`${base}/admin/session`, {
+      method: "POST",
+      headers: { Authorization: `Bearer ${token}` },
+      credentials: "include",
+    });
+    if (!res.ok) {
+      setSignInError("This account is not an admin.");
+      setUnauthorized(true);
+      return;
+    }
+    setUnauthorized(false);
+    await loadRooms();
+  }, [base, loadRooms]);
+
+  useEffect(() => {
+    const unsubscribe = onAuthChange((user) => {
+      if (user) {
+        void completeSignIn();
+      } else {
+        setUnauthorized(true);
+        setRooms([]);
+      }
+    });
+    return unsubscribe;
+  }, [completeSignIn]);
+
   const signIn = async () => {
     setSigningIn(true);
     setSignInError(null);
     try {
       await signInWithGoogle();
-      const token = await getIdToken();
-      if (!token) {
-        setSignInError("Sign-in did not return a token.");
-        return;
-      }
-      const res = await fetch(`${base}/admin/session`, {
-        method: "POST",
-        headers: { Authorization: `Bearer ${token}` },
-        credentials: "include",
-      });
-      if (!res.ok) {
-        setSignInError("This account is not an admin.");
-        return;
-      }
-      setUnauthorized(false);
-      await loadRooms();
     } catch {
-      setSignInError("Network error. Please try again.");
+      setSignInError("Sign-in failed. Please try again.");
     } finally {
       setSigningIn(false);
     }

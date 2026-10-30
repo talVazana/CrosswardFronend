@@ -2,6 +2,7 @@ import {
   GoogleAuthProvider,
   onAuthStateChanged,
   signInWithPopup,
+  signInWithRedirect,
   signOut,
   type User,
 } from "firebase/auth";
@@ -9,9 +10,25 @@ import { getFirebaseAuth } from "./firebase";
 
 const base = process.env.NEXT_PUBLIC_BACKEND_URL ?? "http://localhost:8000";
 
-export function signInWithGoogle(): Promise<unknown> {
+export async function signInWithGoogle(): Promise<void> {
+  const auth = getFirebaseAuth();
   const provider = new GoogleAuthProvider();
-  return signInWithPopup(getFirebaseAuth(), provider);
+  try {
+    await signInWithPopup(auth, provider);
+  } catch (error) {
+    const code = (error as { code?: string })?.code;
+    if (
+      code === "auth/popup-blocked" ||
+      code === "auth/cancelled-popup-request" ||
+      code === "auth/popup-closed-by-user"
+    ) {
+      // Popup is blocked; redirect instead. The page reloads and
+      // onAuthChange picks up the signed-in user.
+      await signInWithRedirect(auth, provider);
+      return;
+    }
+    throw error;
+  }
 }
 
 export async function getIdToken(): Promise<string | null> {

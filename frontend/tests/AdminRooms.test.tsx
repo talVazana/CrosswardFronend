@@ -1,9 +1,10 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 
-const { mockPush, mockReplace } = vi.hoisted(() => ({
+const { mockPush, mockReplace, mockAuthCallback } = vi.hoisted(() => ({
   mockPush: vi.fn(),
   mockReplace: vi.fn(),
+  mockAuthCallback: { current: undefined as undefined | ((user: unknown) => void) },
 }));
 
 vi.mock("next/navigation", () => ({
@@ -11,8 +12,12 @@ vi.mock("next/navigation", () => ({
 }));
 
 vi.mock("@/lib/auth", () => ({
-  signInWithGoogle: vi.fn(async () => ({})),
+  signInWithGoogle: vi.fn(async () => {}),
   getIdToken: vi.fn(async () => "fake-token"),
+  onAuthChange: vi.fn((cb: (user: unknown) => void) => {
+    mockAuthCallback.current = cb;
+    return () => {};
+  }),
 }));
 
 import AdminRoomsPage from "../src/app/admin/rooms/page";
@@ -86,6 +91,8 @@ describe("admin room gallery", () => {
     render(<AdminRoomsPage />);
     await screen.findByText("Admin entry");
     fireEvent.click(screen.getByRole("button", { name: "Sign in with Google" }));
+    // Simulate Firebase auth reporting a signed-in user.
+    mockAuthCallback.current?.({ uid: "user-1" });
 
     expect(await screen.findByText("All rooms")).toBeTruthy();
     expect(screen.getByText("Alpha")).toBeTruthy();
@@ -135,6 +142,8 @@ describe("admin room gallery", () => {
     render(<AdminRoomsPage />);
     await screen.findByText("Admin entry");
     fireEvent.click(screen.getByRole("button", { name: "Sign in with Google" }));
+    // Simulate Firebase auth reporting a signed-in user (non-admin).
+    mockAuthCallback.current?.({ uid: "user-1" });
 
     expect(await screen.findByText("This account is not an admin.")).toBeTruthy();
   });
