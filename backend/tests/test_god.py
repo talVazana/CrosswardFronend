@@ -150,3 +150,17 @@ def test_restore_special_users_keeps_the_primary_god():
     assert special_users.is_god("tal.vazanas@gmail.com")
     assert special_users.website_role_for_email("helper@example.com") == "admin"
     assert special_users.website_role_for_email("stranger@example.com") is None
+
+def test_god_lists_all_signed_in_users(client, god_headers):
+    from app.services import profiles
+    profiles.record_seen("player1@example.com")
+    profiles.set_nickname("player1@example.com", "Dana")
+    profiles.record_seen("player2@example.com")
+
+    response = client.get("/god/users/all", headers=god_headers)
+
+    assert response.status_code == 200
+    users = {u["email"]: u for u in response.json()["users"]}
+    assert users["player1@example.com"]["nickname"] == "Dana"
+    assert users["player1@example.com"]["role"] is None
+    assert users["player2@example.com"]["nickname"] is None

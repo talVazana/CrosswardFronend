@@ -19,6 +19,8 @@ type Setting = {
 
 type GodUser = { email: string; role: "god" | "admin" };
 
+type LoggedInUser = { email: string; nickname: string | null; role: string | null };
+
 type GodStatus = {
   authMode: "emulator" | "google";
   geminiConfigured: boolean;
@@ -46,6 +48,7 @@ export default function GodPage() {
   const [settings, setSettings] = useState<Setting[]>([]);
   const [draft, setDraft] = useState<Record<string, string | boolean>>({});
   const [users, setUsers] = useState<GodUser[]>([]);
+  const [allUsers, setAllUsers] = useState<LoggedInUser[]>([]);
   const [status, setStatus] = useState<GodStatus | null>(null);
 
   const [saving, setSaving] = useState(false);
@@ -76,17 +79,19 @@ export default function GodPage() {
   const loadAll = useCallback(
     async (candidate: string) => {
       const headers = authHeaders(candidate);
-      const [settingsRes, usersRes, statusRes] = await Promise.all([
+      const [settingsRes, usersRes, statusRes, allUsersRes] = await Promise.all([
         fetch(`${base}/god/settings`, { headers }),
         fetch(`${base}/god/users`, { headers }),
         fetch(`${base}/god/status`, { headers }),
+        fetch(`${base}/god/users/all`, { headers }),
       ]);
-      if (!settingsRes.ok || !usersRes.ok || !statusRes.ok) {
+      if (!settingsRes.ok || !usersRes.ok || !statusRes.ok || !allUsersRes.ok) {
         throw new Error("Could not load GOD data");
       }
       applySettings((await settingsRes.json()).settings as Setting[]);
       setUsers((await usersRes.json()).users as GodUser[]);
       setStatus((await statusRes.json()) as GodStatus);
+      setAllUsers((await allUsersRes.json()).users as LoggedInUser[]);
     },
     [applySettings, authHeaders, base],
   );
@@ -429,6 +434,50 @@ export default function GodPage() {
           </p>
         ) : null}
       </form>
+
+      <section className="glass flex flex-col gap-4 px-6 py-6">
+        <div>
+          <h2 className="text-xl font-semibold text-blue-900">Logged-in users</h2>
+          <p className="muted text-xs">
+            Every Google account that has signed in, with its nickname and role.
+          </p>
+        </div>
+
+        {allUsers.length === 0 ? (
+          <p className="muted text-sm">No one has signed in yet.</p>
+        ) : (
+          <div className="flex flex-col gap-2">
+            {allUsers.map((user) => (
+              <div
+                key={user.email}
+                className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-blue-100 bg-white/60 px-4 py-2"
+              >
+                <div className="flex items-center gap-2">
+                  <span className="text-sm text-blue-900">{user.email}</span>
+                  <span className="muted text-xs">
+                    {user.nickname ? `(${user.nickname})` : "no nickname"}
+                  </span>
+                </div>
+                {user.role ? (
+                  <span
+                    className={`rounded-full px-2 py-0.5 text-xs font-semibold ${
+                      user.role === "god"
+                        ? "bg-indigo-100 text-indigo-800"
+                        : "bg-emerald-100 text-emerald-800"
+                    }`}
+                  >
+                    {user.role}
+                  </span>
+                ) : (
+                  <span className="rounded-full bg-slate-100 px-2 py-0.5 text-xs font-semibold text-slate-600">
+                    player
+                  </span>
+                )}
+              </div>
+            ))}
+          </div>
+        )}
+      </section>
 
       <section className="glass flex flex-col gap-4 px-6 py-6">
         <div>

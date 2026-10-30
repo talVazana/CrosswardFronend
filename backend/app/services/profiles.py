@@ -1,8 +1,8 @@
 """Authenticated user profiles.
 
 After Google sign-in a user picks a nickname. The nickname is the display name
-shown in rooms and on the scoreboard. Profiles are keyed by the verified email
-address and survive a restart via Firestore.
+shown in rooms and on the scoreboard. Every signed-in email is tracked here, so
+GOD can list everyone who has logged in. Profiles survive a restart via Firestore.
 """
 
 from __future__ import annotations
@@ -12,11 +12,21 @@ from . import firestore_publisher
 NICKNAME_MIN = 2
 NICKNAME_MAX = 20
 
-_PROFILES: dict[str, str] = {}
+# email -> nickname (None when the user signed in but has no nickname yet)
+_PROFILES: dict[str, str | None] = {}
 
 
 def _normalize_email(email: str | None) -> str:
     return (email or "").strip().casefold()
+
+
+def record_seen(email: str) -> str:
+    """Track a signed-in email without requiring a nickname."""
+    normalized = _normalize_email(email)
+    if normalized not in _PROFILES:
+        _PROFILES[normalized] = None
+        firestore_publisher.publish_profile(normalized, "")
+    return normalized
 
 
 def get_nickname(email: str | None) -> str | None:
@@ -35,7 +45,7 @@ def set_nickname(email: str, nickname: str) -> str:
     return value
 
 
-def list_profiles() -> dict[str, str]:
+def list_profiles() -> dict[str, str | None]:
     return dict(_PROFILES)
 
 
@@ -46,6 +56,6 @@ def reset_profiles() -> None:
 def restore_profiles(mapping: dict[str, str]) -> None:
     for email, nickname in (mapping or {}).items():
         value = (nickname or "").strip()
-        if not (NICKNAME_MIN <= len(value) <= NICKNAME_MAX):
-            continue
-        _PROFILES[_normalize_email(email)] = value
+        _PROFILES[_normalize_email(email)] = (
+            value if NICKNAME_MIN <= len(value) <= NICKNAME_MAX else None
+        )

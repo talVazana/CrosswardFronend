@@ -23,6 +23,7 @@ from google.auth.transport import requests as google_requests
 from google.oauth2 import id_token as google_id_token
 
 from .. import special_users
+from . import profiles
 
 AUTH_HEADER = "Authorization"
 
@@ -72,6 +73,7 @@ def require_google_user(request: Request) -> str:
     email = email_from_token(token)
     if not email:
         raise HTTPException(status_code=401, detail="Could not read email from token")
+    profiles.record_seen(email)
     return email
 
 

@@ -15,7 +15,7 @@ from fastapi import APIRouter, HTTPException, Request
 from pydantic import BaseModel, Field
 
 from ... import special_users
-from ...services import auth, firestore_publisher, gemini_quota, limits
+from ...services import auth, firestore_publisher, gemini_quota, limits, profiles
 
 router = APIRouter()
 
@@ -88,6 +88,22 @@ def god_users(request: Request):
         {"email": email, "role": role}
         for email, role in sorted(special_users.list_special_users().items())
     ]
+    return {"users": users}
+
+
+@router.get("/god/users/all")
+def god_all_users(request: Request):
+    """List every signed-in user with their nickname and role."""
+    _require_god(request)
+    users = [
+        {
+            "email": email,
+            "nickname": nickname,
+            "role": special_users.website_role_for_email(email),
+        }
+        for email, nickname in profiles.list_profiles().items()
+    ]
+    users.sort(key=lambda u: (u["email"],))
     return {"users": users}
 
 
