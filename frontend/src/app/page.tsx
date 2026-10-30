@@ -7,6 +7,7 @@ import EmptyState from "@/components/ui/EmptyState";
 import ErrorMessage from "@/components/ui/ErrorMessage";
 import LoadingSpinner from "@/components/ui/LoadingSpinner";
 import { subscribeRooms } from "@/lib/roomsStore";
+import { getIdToken, getProfile, onAuthChange, signInWithGoogle, signOutGoogle } from "@/lib/auth";
 import {
   RoomSummary,
   isRoomActive,
@@ -276,6 +277,9 @@ export default function Page() {
   const [roomsLoading, setRoomsLoading] = useState(true);
   const [roomsError, setRoomsError] = useState<string | null>(null);
   const [isAdmin, setIsAdmin] = useState(false);
+  const [isGod, setIsGod] = useState(false);
+  const [signedIn, setSignedIn] = useState(false);
+  const [nickname, setNickname] = useState<string | null>(null);
   const [removingRoomId, setRemovingRoomId] = useState<string | null>(null);
   const [totals, setTotals] = useState<PlayerTotal[]>([]);
   const [totalsLoading, setTotalsLoading] = useState(true);
@@ -302,6 +306,32 @@ export default function Page() {
     return () => {
       cancelled = true;
     };
+  }, [base]);
+
+  useEffect(() => {
+    const unsubscribe = onAuthChange(async (user) => {
+      setSignedIn(Boolean(user));
+      if (!user) {
+        setIsGod(false);
+        setNickname(null);
+        return;
+      }
+      try {
+        const token = await getIdToken();
+        if (token) {
+          const godRes = await fetch(`${base}/god/me`, {
+            headers: { Authorization: `Bearer ${token}` },
+          });
+          setIsGod(godRes.ok);
+        }
+        const profile = await getProfile();
+        setNickname(profile.nickname);
+      } catch {
+        setIsGod(false);
+        setNickname(null);
+      }
+    });
+    return unsubscribe;
   }, [base]);
 
   useEffect(() => {
@@ -412,6 +442,28 @@ export default function Page() {
           <Link href="/admin/rooms" className="btn-ghost text-sm">
             Admin
           </Link>
+          {isGod ? (
+            <Link href="/god" className="btn-ghost text-sm">
+              GOD
+            </Link>
+          ) : null}
+          {signedIn ? (
+            <button
+              type="button"
+              onClick={() => void signOutGoogle()}
+              className="btn-ghost text-sm"
+            >
+              {nickname ? `Sign out (${nickname})` : "Sign out"}
+            </button>
+          ) : (
+            <button
+              type="button"
+              onClick={() => void signInWithGoogle()}
+              className="btn-ghost text-sm"
+            >
+              Sign in
+            </button>
+          )}
         </div>
       </header>
 

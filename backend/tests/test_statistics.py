@@ -1,6 +1,8 @@
 import pytest
 from fastapi.testclient import TestClient
 
+import jwt
+
 import app.services.scoring_service as scoring_service
 from app.api.routes import admin as admin_module
 from app.api.routes import drafts as drafts_module
@@ -115,7 +117,12 @@ def as_player(client: TestClient, token: str) -> None:
 
 
 def as_admin(client: TestClient) -> None:
-    response = client.post("/admin/session", json={"password": "1234"})
+    token = jwt.encode(
+        {"email": "shachar383838@gmail.com"}, "test-secret", algorithm="HS256"
+    )
+    response = client.post(
+        "/admin/session", headers={"Authorization": f"Bearer {token}"}
+    )
     assert response.status_code == 200, response.text
 
 

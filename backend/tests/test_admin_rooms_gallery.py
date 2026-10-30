@@ -155,20 +155,19 @@ def test_admin_room_gallery_requires_an_admin_session(client, env):
     assert response.status_code == 403
 
 
-def test_admin_session_cookie_is_separate_from_player_session(client, env):
+def test_admin_session_cookie_is_separate_from_player_session(client, env, admin_headers):
     client.cookies.set(rooms_module.SESSION_COOKIE_NAME, PLAYER_TOKEN)
 
-    response = client.post("/admin/session", json={"token": ADMIN_TOKEN})
+    response = client.post("/admin/session", headers=admin_headers)
 
     assert response.status_code == 200, response.text
-    assert response.json()["displayName"] == "Admin"
-    assert client.cookies.get("Admin-Session-Token") == ADMIN_TOKEN
+    assert response.json()["displayName"] == "shachar383838@gmail.com"
+    assert client.cookies.get("Admin-Session-Token") is not None
     assert client.cookies.get(rooms_module.SESSION_COOKIE_NAME) == PLAYER_TOKEN
 
 
-def test_admin_session_cookie_grants_access_to_admin_gallery(client, env):
-    client.cookies.set(rooms_module.SESSION_COOKIE_NAME, PLAYER_TOKEN)
-    login = client.post("/admin/session", json={"token": ADMIN_TOKEN})
+def test_admin_session_cookie_grants_access_to_admin_gallery(client, env, admin_headers):
+    login = client.post("/admin/session", headers=admin_headers)
     assert login.status_code == 200, login.text
 
     response = client.get("/admin/rooms")
@@ -177,20 +176,20 @@ def test_admin_session_cookie_grants_access_to_admin_gallery(client, env):
     assert len(response.json()) == 4
 
 
-def test_admin_session_rejects_invalid_and_player_tokens(client, env):
-    invalid = client.post("/admin/session", json={"token": "not-a-session"})
-    assert invalid.status_code == 401
+def test_admin_session_rejects_missing_and_non_admin_tokens(client, env, admin_headers, player_headers):
+    missing = client.post("/admin/session")
+    assert missing.status_code == 401
 
-    player = client.post("/admin/session", json={"token": PLAYER_TOKEN})
+    player = client.post("/admin/session", headers=player_headers)
     assert player.status_code == 403
     assert client.cookies.get("Admin-Session-Token") is None
 
 
-def test_admin_password_login_grants_access_to_admin_gallery(client, env):
-    response = client.post("/admin/session", json={"password": "1234"})
+def test_admin_google_login_grants_access_to_admin_gallery(client, env, admin_headers):
+    response = client.post("/admin/session", headers=admin_headers)
 
     assert response.status_code == 200, response.text
-    assert response.json()["displayName"] == "Admin"
+    assert response.json()["displayName"] == "shachar383838@gmail.com"
     assert client.cookies.get("Admin-Session-Token") is not None
 
     gallery = client.get("/admin/rooms")
@@ -198,8 +197,8 @@ def test_admin_password_login_grants_access_to_admin_gallery(client, env):
     assert len(gallery.json()) == 4
 
 
-def test_admin_password_login_rejects_wrong_password(client, env):
-    response = client.post("/admin/session", json={"password": "9999"})
+def test_admin_google_login_rejects_non_admin(client, env, player_headers):
+    response = client.post("/admin/session", headers=player_headers)
 
-    assert response.status_code == 401
+    assert response.status_code == 403
     assert client.cookies.get("Admin-Session-Token") is None

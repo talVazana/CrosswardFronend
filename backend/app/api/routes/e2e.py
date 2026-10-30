@@ -213,7 +213,7 @@ def reset_all_state():
     drafts_module.player_clue_state_repository.states.clear()
     admin_puzzles_module.puzzle_repository._puzzles.clear()
     admin_module.answer_repository._answers.clear()
-    admin_module._admin_password_tokens.clear()
+    admin_module._admin_auth_tokens.clear()
     rooms_module.identity_repository = InMemoryPlayerIdentityRepository()
     player_totals.repository = InMemoryPlayerTotalRepository()
     admin_solves.repository = InMemoryAdminSolveRepository()

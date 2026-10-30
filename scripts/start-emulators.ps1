@@ -6,7 +6,7 @@ if (-not (Test-Path -LiteralPath $dataDir)) {
     New-Item -ItemType Directory -Force -Path $dataDir | Out-Null
 }
 
-$arguments = @('emulators:start', '--only', 'firestore,apphosting')
+$arguments = @('emulators:start', '--only', 'firestore,auth,apphosting')
 $metadataFile = Join-Path $dataDir 'firebase-export-metadata.json'
 if (Test-Path -LiteralPath $metadataFile) {
     $arguments += @('--import', $dataDir)
@@ -18,6 +18,7 @@ try {
     Write-Host "Starting Firebase emulators (project: demo-crossword-arena)"
     Write-Host "Website: http://localhost:5002"
     Write-Host "Firestore: http://127.0.0.1:8080"
+    Write-Host "Auth: http://127.0.0.1:9099"
     Write-Host "Emulator UI: http://127.0.0.1:4000"
     Write-Host "Local data: $dataDir"
     Write-Host "Press Ctrl+C to stop."

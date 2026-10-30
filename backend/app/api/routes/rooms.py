@@ -2,7 +2,7 @@ import secrets
 import threading
 from collections import Counter
 
-from fastapi import APIRouter, Cookie, HTTPException, Response
+from fastapi import APIRouter, Cookie, HTTPException, Request, Response
 from pydantic import BaseModel, Field
 
 from ...models.room import ASSIGNED_PLAYER_COLORS, Player, PlayerIdentity
@@ -16,7 +16,7 @@ from ...repositories.interfaces import (
     PlayerRepository,
     RoomRepository,
 )
-from ...services import firestore_publisher, scoring_service
+from ...services import auth, firestore_publisher, profiles, scoring_service
 from ...services.room_service import RoomService
 
 router = APIRouter()
@@ -136,11 +136,19 @@ class JoinRequest(BaseModel):
 
 
 @router.post("/rooms/{roomId}/join")
-def join_room(roomId: str, body: JoinRequest, response: Response, session_token: str | None = Cookie(default=None, alias="Session-Token")):
+def join_room(roomId: str, body: JoinRequest, response: Response, request: Request, session_token: str | None = Cookie(default=None, alias="Session-Token")):
     if room_repository.get(roomId) is None:
         raise HTTPException(status_code=404, detail="Room not found")
 
     desired_name = body.displayName.strip()
+    if request.headers.get("Authorization"):
+        email = auth.require_google_user(request)
+        nickname = profiles.get_nickname(email)
+        if not nickname:
+            raise HTTPException(
+                status_code=400, detail="Set a nickname before joining"
+            )
+        desired_name = nickname
 
     with _join_lock:
         _sync_room_identities(roomId)

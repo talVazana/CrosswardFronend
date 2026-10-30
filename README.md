@@ -68,6 +68,21 @@ Authentication, including Google sign-in, is not configured yet.
 The normal frontend at `http://localhost:3000` is still available when running
 `./scripts/start-dev.ps1`.
 
+## GOD window
+
+The GOD window at `/god` manages runtime limits and special website users.
+Google sign-in is not configured yet, so it uses a server-side access key:
+
+1. Set `GOD_ACCESS_KEY` before starting the backend. The window stays locked
+   while this variable is unset.
+2. Open `/god` and enter the key. The page stores it in `sessionStorage` for the
+   current tab only.
+3. Use the Lock button to clear it.
+
+Limits are validated on the server and saved to Firestore, so they survive a
+backend restart. The special-user list is saved the same way. The primary GOD
+account cannot be removed or demoted. GOD cannot perform game admin actions.
+
 ### Data flow
 
 The frontend reads shared, public state from Firestore:

@@ -1,4 +1,5 @@
 import { getApp, getApps, initializeApp, type FirebaseApp } from "firebase/app";
+import { getAuth, connectAuthEmulator, type Auth } from "firebase/auth";
 import {
   connectFirestoreEmulator,
   getFirestore,
@@ -17,7 +18,12 @@ function getFirebaseApp(): FirebaseApp {
   if (getApps().length > 0) {
     return getApp();
   }
-  return initializeApp({ projectId });
+  return initializeApp({
+    projectId,
+    apiKey: process.env.NEXT_PUBLIC_FIREBASE_API_KEY ?? "demo-api-key",
+    authDomain: process.env.NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN,
+    appId: process.env.NEXT_PUBLIC_FIREBASE_APP_ID,
+  });
 }
 
 let firestoreInstance: Firestore | null = null;
@@ -31,4 +37,22 @@ export function getDb(): Firestore {
   connectFirestoreEmulator(db, emulatorHost, emulatorPort);
   firestoreInstance = db;
   return db;
+}
+
+let authInstance: Auth | null = null;
+let authEmulatorConnected = false;
+
+export function getFirebaseAuth(): Auth {
+  if (authInstance) {
+    return authInstance;
+  }
+  const app = getFirebaseApp();
+  const auth = getAuth(app);
+  const authEmulatorHost = process.env.NEXT_PUBLIC_FIREBASE_AUTH_EMULATOR_HOST;
+  if (authEmulatorHost && !authEmulatorConnected) {
+    connectAuthEmulator(auth, authEmulatorHost);
+    authEmulatorConnected = true;
+  }
+  authInstance = auth;
+  return auth;
 }

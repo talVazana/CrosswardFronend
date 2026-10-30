@@ -368,6 +368,31 @@ def publish_admin_token(token: str) -> None:
     _write_document("admin_sessions", token, {"token": token})
 
 
+def publish_god_settings(overrides: dict) -> None:
+    """Persist GOD runtime limit overrides so a restart keeps them."""
+    if not _publishing_enabled():
+        return
+    _write_document("settings", "god", {"overrides": dict(overrides)})
+
+
+def publish_special_users(roles: dict[str, str]) -> None:
+    """Persist the special-user list so a restart keeps it."""
+    if not _publishing_enabled():
+        return
+    _write_document("special_users", "users", {"roles": dict(roles)})
+
+
+def publish_profile(email: str, nickname: str) -> None:
+    """Persist one authenticated user's nickname across restarts."""
+    if not _publishing_enabled():
+        return
+    _write_document(
+        "profiles",
+        urllib.parse.quote(email, safe=""),
+        {"email": email, "nickname": nickname},
+    )
+
+
 def _decode_value(value: dict) -> object:
     if "stringValue" in value:
         return value["stringValue"]

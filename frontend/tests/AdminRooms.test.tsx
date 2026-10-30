@@ -10,7 +10,13 @@ vi.mock("next/navigation", () => ({
   useRouter: () => ({ push: mockPush, replace: mockReplace }),
 }));
 
+vi.mock("@/lib/auth", () => ({
+  signInWithGoogle: vi.fn(async () => ({})),
+  getIdToken: vi.fn(async () => "fake-token"),
+}));
+
 import AdminRoomsPage from "../src/app/admin/rooms/page";
+import { getIdToken, signInWithGoogle } from "../src/lib/auth";
 import type { RoomSummary } from "../src/utils/rooms";
 
 const room: RoomSummary = {
@@ -40,7 +46,7 @@ afterEach(() => {
 });
 
 describe("admin room gallery", () => {
-  it("shows the admin token entry when the session is missing", async () => {
+  it("shows the Google sign-in entry when the session is missing", async () => {
     vi.stubGlobal(
       "fetch",
       vi.fn(async () => jsonResponse({ detail: "Unauthorized" }, 401)),
@@ -49,13 +55,12 @@ describe("admin room gallery", () => {
     render(<AdminRoomsPage />);
 
     expect(await screen.findByText("Admin entry")).toBeTruthy();
-    expect(screen.getByLabelText("Admin password")).toBeTruthy();
     expect(
-      screen.getByRole("button", { name: "Enter admin area" }),
+      screen.getByRole("button", { name: "Sign in with Google" }),
     ).toBeTruthy();
   });
 
-  it("exchanges the admin password for a session and then lists rooms", async () => {
+  it("signs in with Google and then lists rooms", async () => {
     let adminGalleryCalls = 0;
     const fetchMock = vi.fn(
       async (input: RequestInfo | URL, init?: RequestInit) => {
@@ -70,7 +75,7 @@ describe("admin room gallery", () => {
           return jsonResponse({
             roomId: "alpha",
             playerId: "admin-1",
-            displayName: "Admin",
+            displayName: "shachar383838@gmail.com",
           });
         }
         throw new Error(`Unexpected fetch: ${url}`);
@@ -80,10 +85,7 @@ describe("admin room gallery", () => {
 
     render(<AdminRoomsPage />);
     await screen.findByText("Admin entry");
-    fireEvent.change(screen.getByLabelText("Admin password"), {
-      target: { value: "1234" },
-    });
-    fireEvent.click(screen.getByRole("button", { name: "Enter admin area" }));
+    fireEvent.click(screen.getByRole("button", { name: "Sign in with Google" }));
 
     expect(await screen.findByText("All rooms")).toBeTruthy();
     expect(screen.getByText("Alpha")).toBeTruthy();
@@ -92,8 +94,8 @@ describe("admin room gallery", () => {
       String(url).endsWith("/admin/session"),
     );
     expect(sessionCall).toBeTruthy();
-    expect(JSON.parse(String((sessionCall?.[1] as RequestInit).body))).toEqual({
-      password: "1234",
+    expect((sessionCall?.[1] as RequestInit).headers).toMatchObject({
+      Authorization: "Bearer fake-token",
     });
     expect((sessionCall?.[1] as RequestInit).credentials).toBe("include");
   });
@@ -115,7 +117,7 @@ describe("admin room gallery", () => {
     ).toBe("/rooms/alpha");
   });
 
-  it("reports an incorrect admin password", async () => {
+  it("reports a non-admin Google account", async () => {
     vi.stubGlobal(
       "fetch",
       vi.fn(async (input: RequestInfo | URL) => {
@@ -124,7 +126,7 @@ describe("admin room gallery", () => {
           return jsonResponse({ detail: "Unauthorized" }, 401);
         }
         if (url.endsWith("/admin/session")) {
-          return jsonResponse({ detail: "Invalid admin password" }, 401);
+          return jsonResponse({ detail: "Forbidden" }, 403);
         }
         throw new Error(`Unexpected fetch: ${url}`);
       }),
@@ -132,11 +134,8 @@ describe("admin room gallery", () => {
 
     render(<AdminRoomsPage />);
     await screen.findByText("Admin entry");
-    fireEvent.change(screen.getByLabelText("Admin password"), {
-      target: { value: "wrong" },
-    });
-    fireEvent.click(screen.getByRole("button", { name: "Enter admin area" }));
+    fireEvent.click(screen.getByRole("button", { name: "Sign in with Google" }));
 
-    expect(await screen.findByText("Incorrect admin password.")).toBeTruthy();
+    expect(await screen.findByText("This account is not an admin.")).toBeTruthy();
   });
 });

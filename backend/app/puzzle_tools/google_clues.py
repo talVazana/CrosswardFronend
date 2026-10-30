@@ -1,5 +1,6 @@
 import argparse
 import json
+import logging
 import os
 import re
 import sys
@@ -7,6 +8,10 @@ import sys
 from PIL import Image
 from google import genai
 from google.genai import types
+
+from ..services.limits import Limits, get_limits
+
+logger = logging.getLogger(__name__)
 
 DEFAULT_MODEL = "gemini-2.5-flash"
 FALLBACK_MODEL = "gemini-3.5-flash"
@@ -46,10 +51,16 @@ def _parse_json(text):
     return json.loads(text)
 
 
-def _normalize(data):
+def _normalize(data, limits: Limits | None = None):
+    limits = limits or get_limits()
     if not isinstance(data, list):
         raise ValueError("Expected a JSON array of clues")
+    if len(data) > limits.max_clues:
+        raise ValueError(
+            f"Too many clues: {len(data)} (max {limits.max_clues})"
+        )
     clues = []
+    total_chars = 0
     for item in data:
         if not isinstance(item, dict):
             continue
@@ -64,7 +75,22 @@ def _normalize(data):
             raise ValueError(f"Unknown direction: {direction!r}")
         if number is None or not text:
             raise ValueError(f"Missing number or text in: {item!r}")
-        clues.append({"number": int(number), "direction": direction, "text": text})
+        try:
+            number = int(number)
+        except (TypeError, ValueError) as exc:
+            raise ValueError(f"Clue number is not an integer: {number!r}") from exc
+        if len(text) > limits.max_clue_length:
+            raise ValueError(
+                f"Clue text is too long: {len(text)} characters "
+                f"(max {limits.max_clue_length})"
+            )
+        total_chars += len(text)
+        if total_chars > limits.max_total_clue_chars:
+            raise ValueError(
+                f"Clue text is too long: {total_chars} characters "
+                f"(max {limits.max_total_clue_chars})"
+            )
+        clues.append({"number": number, "direction": direction, "text": text})
     order = {"across": 0, "down": 1}
     clues.sort(key=lambda c: (order.get(c["direction"], 2), c["number"]))
     return clues
@@ -78,21 +104,65 @@ def _generate(client, image, prompt, model):
     )
 
 
-def extract_clues(image_path, model=None):
+_NON_RETRYABLE_STATUS = {400, 401, 403, 404, 429}
+_NON_RETRYABLE_MARKERS = (
+    "quota",
+    "billing",
+    "permission",
+    "unauthorized",
+    "api key",
+    "invalid argument",
+)
+
+
+def _fallback_allowed(exc: Exception) -> bool:
+    """Allow one fallback only for eligible transient or model failures."""
+    if isinstance(exc, (ValueError, TypeError, FileNotFoundError, PermissionError)):
+        return False
+    code = getattr(exc, "code", None) or getattr(exc, "status_code", None)
+    if isinstance(code, int) and code in _NON_RETRYABLE_STATUS:
+        return False
+    message = str(exc).lower()
+    if any(marker in message for marker in _NON_RETRYABLE_MARKERS):
+        return False
+    return True
+
+
+def extract_clues(
+    image_path,
+    model=None,
+    timeout_seconds=None,
+    max_attempts=None,
+    limits: Limits | None = None,
+):
+    limits = limits or get_limits()
     if not os.path.exists(image_path):
         raise FileNotFoundError(f"Cannot load image: {image_path}")
     api_key = get_api_key()
     if not api_key:
         raise RuntimeError("Missing GEMINI_API_KEY / GOOGLE_API_KEY environment variable")
 
+    timeout = timeout_seconds or limits.gemini_timeout_seconds
+    attempts = max_attempts or limits.gemini_max_attempts
+
     image = Image.open(image_path)
-    client = genai.Client(api_key=api_key)
+    client = genai.Client(
+        api_key=api_key,
+        http_options=types.HttpOptions(
+            timeout=timeout * 1000,
+            retry_options=types.HttpRetryOptions(attempts=1),
+        ),
+    )
     primary = model or DEFAULT_MODEL
 
     try:
         response = _generate(client, image, PROMPT, primary)
     except Exception as exc:
-        print(f"Model {primary} failed ({exc}), falling back to {FALLBACK_MODEL}...")
+        if attempts < 2 or not _fallback_allowed(exc):
+            raise
+        logger.warning(
+            "Model %s failed (%s); falling back to %s", primary, exc, FALLBACK_MODEL
+        )
         response = _generate(client, image, PROMPT, FALLBACK_MODEL)
 
     text = getattr(response, "text", None)
@@ -103,7 +173,7 @@ def extract_clues(image_path, model=None):
             for part in candidate.content.parts
             if getattr(part, "text", None)
         )
-    return _normalize(_parse_json(text))
+    return _normalize(_parse_json(text), limits)
 
 
 def main():

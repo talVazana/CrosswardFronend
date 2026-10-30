@@ -26,6 +26,9 @@ from ..models.gameplay import PublicClueState, ScoreEvent, utc_now
 from ..models.room import Player, Room, RoomStatus
 from ..models.puzzle import Puzzle
 from . import firestore_publisher
+from . import limits as limits_module
+from . import profiles as profiles_module
+from .. import special_users
 
 
 def _restored_timestamp(value) -> "datetime":
@@ -185,7 +188,7 @@ def _restore_sessions() -> None:
     for document in firestore_publisher.read_collection("admin_sessions"):
         token = document.get("_id") or document.get("token")
         if token:
-            admin_module._admin_password_tokens.add(token)
+            admin_module._admin_auth_tokens.add(token)
 
 
 def _restore_identities() -> None:
@@ -347,6 +350,38 @@ def _restore_admin_solves() -> None:
         )
 
 
+def _restore_god_settings() -> None:
+    """Apply GOD runtime settings saved in Firestore."""
+    for document in firestore_publisher.read_collection("settings"):
+        if document.get("_id") != "god":
+            continue
+        overrides = document.get("overrides")
+        if isinstance(overrides, dict):
+            limits_module.restore_overrides(overrides)
+
+
+def _restore_special_users() -> None:
+    """Apply the special-user list saved in Firestore."""
+    for document in firestore_publisher.read_collection("special_users"):
+        if document.get("_id") != "users":
+            continue
+        roles = document.get("roles")
+        if isinstance(roles, dict):
+            special_users.restore_special_users(roles)
+
+
+def _restore_profiles() -> None:
+    """Apply saved nicknames keyed by email."""
+    mapping: dict[str, str] = {}
+    for document in firestore_publisher.read_collection("profiles"):
+        email = document.get("email")
+        nickname = document.get("nickname")
+        if email and nickname:
+            mapping[email] = nickname
+    if mapping:
+        profiles_module.restore_profiles(mapping)
+
+
 def restore_state() -> None:
     """Rebuild in-memory state from Firestore. Safe to call once at startup."""
     if not firestore_publisher._publishing_enabled():
@@ -361,6 +396,9 @@ def restore_state() -> None:
         _restore_submissions()
         _restore_player_states()
         _restore_admin_solves()
+        _restore_god_settings()
+        _restore_special_users()
+        _restore_profiles()
         firestore_publisher.publish_all_rooms()
     except Exception:
         # Never block startup because the mirror is unavailable.

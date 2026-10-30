@@ -9,7 +9,7 @@ from ...models.gameplay import SubmissionStatus
 from ...models.room import Player, Room, RoomStatus
 from ...repositories.in_memory import InMemoryAnswerRepository
 from ...repositories.interfaces import AnswerRepository
-from ...services import firestore_publisher
+from ...services import auth, firestore_publisher, telegram_notifier
 from ...services import scoring_service
 from ...services.puzzle_image_processor import PuzzleProcessingError, process_image
 from ...services.puzzle_utils import normalize_answer
@@ -20,10 +20,9 @@ from . import rooms as rooms_module
 router = APIRouter()
 
 ADMIN_SESSION_COOKIE_NAME = "Admin-Session-Token"
-ADMIN_PASSWORD = "1234"
 
 answer_repository: AnswerRepository = InMemoryAnswerRepository()
-_admin_password_tokens: set[str] = set()
+_admin_auth_tokens: set[str] = set()
 
 _ENDPOINT_TRANSITIONS: dict[str, tuple[frozenset[RoomStatus], RoomStatus]] = {
     "start": (frozenset({RoomStatus.lobby}), RoomStatus.active),
@@ -38,14 +37,9 @@ class AnswerRequest(BaseModel):
     answer: str
 
 
-class AdminSessionRequest(BaseModel):
-    token: str | None = None
-    password: str | None = None
-
-
 def _resolve_admin(request: Request):
     admin_cookie = request.cookies.get(ADMIN_SESSION_COOKIE_NAME)
-    if admin_cookie is not None and admin_cookie in _admin_password_tokens:
+    if admin_cookie is not None and admin_cookie in _admin_auth_tokens:
         return SimpleNamespace(playerId="admin", displayName="Admin", role="admin")
 
     tokens: list[str] = []
@@ -72,44 +66,19 @@ def _resolve_admin(request: Request):
 
 
 @router.post("/admin/session")
-def create_admin_session(body: AdminSessionRequest, response: Response):
-    if body.password is not None:
-        if not secrets.compare_digest(body.password, ADMIN_PASSWORD):
-            raise HTTPException(status_code=401, detail="Invalid admin password")
-        token = secrets.token_hex(16)
-        _admin_password_tokens.add(token)
-        firestore_publisher.publish_admin_token(token)
-        response.set_cookie(
-            key=ADMIN_SESSION_COOKIE_NAME,
-            value=token,
-            httponly=True,
-            secure=False,
-            samesite="lax",
-        )
-        return {"roomId": None, "playerId": "admin", "displayName": "Admin"}
-
-    if body.token is None:
-        raise HTTPException(status_code=400, detail="Provide an admin password")
-
-    session = rooms_module._sessions.get(body.token)
-    if session is None:
-        raise HTTPException(status_code=401, detail="Invalid admin session token")
-    room_id, player_id = session
-    player = rooms_module.player_repository.get(room_id, player_id)
-    if player is None or player.role != "admin":
-        raise HTTPException(status_code=403, detail="This token is not an admin token")
+def create_admin_session(request: Request, response: Response):
+    email = auth.require_admin(request)
+    token = secrets.token_hex(16)
+    _admin_auth_tokens.add(token)
+    firestore_publisher.publish_admin_token(token)
     response.set_cookie(
         key=ADMIN_SESSION_COOKIE_NAME,
-        value=body.token,
+        value=token,
         httponly=True,
         secure=False,
         samesite="lax",
     )
-    return {
-        "roomId": room_id,
-        "playerId": player_id,
-        "displayName": player.displayName,
-    }
+    return {"roomId": None, "playerId": "admin", "displayName": email}
 
 
 @router.get("/admin/rooms")
@@ -267,6 +236,10 @@ def _admin_transition(roomId: str, action: str, request: Request) -> Room:
     rooms_module.room_repository.update(room)
     events_module.broadcast_room_status_changed(roomId, room.status.value)
     firestore_publisher.publish_room(roomId)
+    if action == "start":
+        telegram_notifier.notify_game_started(room)
+    elif action == "finish":
+        telegram_notifier.notify_game_finished(room)
     return room
 
 

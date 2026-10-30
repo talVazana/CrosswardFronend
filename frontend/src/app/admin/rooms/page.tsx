@@ -6,6 +6,7 @@ import { useRouter } from "next/navigation";
 import EmptyState from "@/components/ui/EmptyState";
 import ErrorMessage from "@/components/ui/ErrorMessage";
 import LoadingSpinner from "@/components/ui/LoadingSpinner";
+import { getIdToken, signInWithGoogle } from "@/lib/auth";
 import {
   RoomSummary,
   isRoomActive,
@@ -81,7 +82,6 @@ export default function AdminRoomsPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [unauthorized, setUnauthorized] = useState(false);
-  const [password, setPassword] = useState("");
   const [signingIn, setSigningIn] = useState(false);
   const [signInError, setSignInError] = useState<string | null>(null);
   const [roomTitle, setRoomTitle] = useState("");
@@ -119,27 +119,25 @@ export default function AdminRoomsPage() {
     void loadRooms();
   }, [loadRooms]);
 
-  const signIn = async (e: FormEvent<HTMLFormElement>) => {
-    e.preventDefault();
-    const trimmed = password.trim();
-    if (!trimmed) {
-      setSignInError("Enter the admin password to continue.");
-      return;
-    }
+  const signIn = async () => {
     setSigningIn(true);
     setSignInError(null);
     try {
-      const res = await fetch(`${base}/admin/session`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        credentials: "include",
-        body: JSON.stringify({ password: trimmed }),
-      });
-      if (!res.ok) {
-        setSignInError("Incorrect admin password.");
+      await signInWithGoogle();
+      const token = await getIdToken();
+      if (!token) {
+        setSignInError("Sign-in did not return a token.");
         return;
       }
-      setPassword("");
+      const res = await fetch(`${base}/admin/session`, {
+        method: "POST",
+        headers: { Authorization: `Bearer ${token}` },
+        credentials: "include",
+      });
+      if (!res.ok) {
+        setSignInError("This account is not an admin.");
+        return;
+      }
       setUnauthorized(false);
       await loadRooms();
     } catch {
@@ -217,37 +215,22 @@ export default function AdminRoomsPage() {
           <div className="flex flex-col gap-2">
             <h2 className="text-2xl font-semibold text-blue-900">Admin entry</h2>
             <p className="muted text-sm">
-              Enter the admin password to open the room dashboard.
+              Sign in with Google to open the room dashboard.
             </p>
           </div>
-          <form onSubmit={signIn} className="flex flex-col gap-3 sm:max-w-xl sm:flex-row">
-            <label className="flex flex-1 flex-col gap-1 text-start">
-              <span className="text-sm font-medium">Admin password</span>
-              <input
-                type="password"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                className="input"
-                placeholder="Enter admin password"
-                autoComplete="current-password"
-              />
-            </label>
-            <button
-              type="submit"
-              disabled={signingIn}
-              className="btn-primary sm:self-end"
-            >
-              {signingIn ? "Signing in..." : "Enter admin area"}
-            </button>
-          </form>
+          <button
+            type="button"
+            onClick={() => void signIn()}
+            disabled={signingIn}
+            className="btn-primary sm:self-start"
+          >
+            {signingIn ? "Signing in..." : "Sign in with Google"}
+          </button>
           {signInError ? (
             <p role="alert" className="text-sm font-medium text-rose-700">
               {signInError}
             </p>
           ) : null}
-          <p className="muted text-xs">
-            Local development password: <strong>1234</strong>
-          </p>
         </section>
       ) : loading ? (
         <LoadingSpinner label="Loading admin rooms..." />
