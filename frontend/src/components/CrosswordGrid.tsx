@@ -12,6 +12,7 @@ import {
 import { useCrosswordSelection, type Direction } from "@/hooks/useCrosswordSelection";
 import { build2DGrid, Cell } from "@/utils/grid";
 import { cellKey, cellsForClue, softColor } from "@/utils/crossword";
+import { roomFetch } from "@/lib/roomSession";
 
 export interface Clue {
   clueId: string;
@@ -400,13 +401,12 @@ export default function CrosswordGrid({
     setError(null);
     setLastPoints(null);
     try {
-      const base = process.env.NEXT_PUBLIC_BACKEND_URL ?? "http://localhost:8000";
-      const res = await fetch(
-        `${base}/rooms/${roomId}/clues/${activeClueId}/submissions`,
+      const res = await roomFetch(
+        roomId,
+        `/rooms/${roomId}/clues/${activeClueId}/submissions`,
         {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          credentials: "include",
           body: JSON.stringify({ answer }),
         },
       );
@@ -464,12 +464,11 @@ export default function CrosswordGrid({
     setRevealing(true);
     setError(null);
     try {
-      const base = process.env.NEXT_PUBLIC_BACKEND_URL ?? "http://localhost:8000";
-      const res = await fetch(
-        `${base}/rooms/${roomId}/clues/${activeClueId}/reveal`,
+      const res = await roomFetch(
+        roomId,
+        `/rooms/${roomId}/clues/${activeClueId}/reveal`,
         {
           method: "POST",
-          credentials: "include",
         },
       );
       if (res.status === 400) {

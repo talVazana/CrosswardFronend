@@ -13,7 +13,8 @@ vi.mock("next/navigation", () => ({
 
 vi.mock("@/lib/auth", () => ({
   signInWithGoogle: vi.fn(async () => {}),
-  getIdToken: vi.fn(async () => "fake-token"),
+  signOutGoogle: vi.fn(async () => {}),
+  adminFetch: vi.fn(),
   onAuthChange: vi.fn((cb: (user: unknown) => void) => {
     mockAuthCallback.current = cb;
     return () => {};
@@ -21,7 +22,7 @@ vi.mock("@/lib/auth", () => ({
 }));
 
 import AdminRoomsPage from "../src/app/admin/rooms/page";
-import { getIdToken, signInWithGoogle } from "../src/lib/auth";
+import { adminFetch, signInWithGoogle } from "../src/lib/auth";
 import type { RoomSummary } from "../src/utils/rooms";
 
 const room: RoomSummary = {
@@ -34,6 +35,11 @@ const room: RoomSummary = {
   clueCount: 24,
 };
 
+const adminUser = {
+  uid: "user-1",
+  email: "shachar383838@gmail.com",
+};
+
 function jsonResponse(data: unknown, status = 200) {
   return {
     ok: status >= 200 && status < 300,
@@ -42,22 +48,23 @@ function jsonResponse(data: unknown, status = 200) {
   } as Response;
 }
 
+function mockAdminFetch(handler: (path: string) => Response) {
+  vi.mocked(adminFetch).mockImplementation(async (path: string) => handler(path));
+}
+
 afterEach(() => {
   cleanup();
-  vi.unstubAllGlobals();
-  vi.restoreAllMocks();
+  vi.clearAllMocks();
   mockPush.mockReset();
   mockReplace.mockReset();
 });
 
 describe("admin room gallery", () => {
   it("shows the Google sign-in entry when the session is missing", async () => {
-    vi.stubGlobal(
-      "fetch",
-      vi.fn(async () => jsonResponse({ detail: "Unauthorized" }, 401)),
-    );
+    mockAdminFetch(() => jsonResponse({ detail: "Unauthorized" }, 401));
 
     render(<AdminRoomsPage />);
+    mockAuthCallback.current?.(null);
 
     expect(await screen.findByText("Admin entry")).toBeTruthy();
     expect(
@@ -65,55 +72,32 @@ describe("admin room gallery", () => {
     ).toBeTruthy();
   });
 
-  it("signs in with Google and then lists rooms", async () => {
-    let adminGalleryCalls = 0;
-    const fetchMock = vi.fn(
-      async (input: RequestInfo | URL, init?: RequestInit) => {
-        const url = String(input);
-        if (url.endsWith("/admin/rooms")) {
-          adminGalleryCalls += 1;
-          return adminGalleryCalls === 1
-            ? jsonResponse({ detail: "Unauthorized" }, 401)
-            : jsonResponse([room]);
-        }
-        if (url.endsWith("/admin/session")) {
-          return jsonResponse({
-            roomId: "alpha",
-            playerId: "admin-1",
-            displayName: "shachar383838@gmail.com",
-          });
-        }
-        throw new Error(`Unexpected fetch: ${url}`);
-      },
-    );
-    vi.stubGlobal("fetch", fetchMock);
+  it("enters the admin gallery silently when the Google account is an admin", async () => {
+    mockAdminFetch((path) => {
+      if (path === "/admin/me") return jsonResponse({ displayName: adminUser.email });
+      if (path === "/admin/rooms") return jsonResponse([room]);
+      throw new Error(`Unexpected adminFetch: ${path}`);
+    });
 
     render(<AdminRoomsPage />);
-    await screen.findByText("Admin entry");
-    fireEvent.click(screen.getByRole("button", { name: "Sign in with Google" }));
-    // Simulate Firebase auth reporting a signed-in user.
-    mockAuthCallback.current?.({ uid: "user-1" });
+    mockAuthCallback.current?.(adminUser);
 
     expect(await screen.findByText("All rooms")).toBeTruthy();
     expect(screen.getByText("Alpha")).toBeTruthy();
-
-    const sessionCall = fetchMock.mock.calls.find(([url]) =>
-      String(url).endsWith("/admin/session"),
-    );
-    expect(sessionCall).toBeTruthy();
-    expect((sessionCall?.[1] as RequestInit).headers).toMatchObject({
-      Authorization: "Bearer fake-token",
-    });
-    expect((sessionCall?.[1] as RequestInit).credentials).toBe("include");
+    expect(screen.queryByText("Admin entry")).toBeNull();
+    expect(adminFetch).toHaveBeenCalledWith("/admin/me");
+    expect(adminFetch).toHaveBeenCalledWith("/admin/rooms");
   });
 
   it("lists rooms with links to each dashboard and the player view", async () => {
-    vi.stubGlobal(
-      "fetch",
-      vi.fn(async () => jsonResponse([room])),
-    );
+    mockAdminFetch((path) => {
+      if (path === "/admin/me") return jsonResponse({ displayName: adminUser.email });
+      if (path === "/admin/rooms") return jsonResponse([room]);
+      throw new Error(`Unexpected adminFetch: ${path}`);
+    });
 
     render(<AdminRoomsPage />);
+    mockAuthCallback.current?.(adminUser);
 
     expect(await screen.findByText("All rooms")).toBeTruthy();
     expect(
@@ -124,27 +108,24 @@ describe("admin room gallery", () => {
     ).toBe("/rooms/alpha");
   });
 
-  it("reports a non-admin Google account", async () => {
-    vi.stubGlobal(
-      "fetch",
-      vi.fn(async (input: RequestInfo | URL) => {
-        const url = String(input);
-        if (url.endsWith("/admin/rooms")) {
-          return jsonResponse({ detail: "Unauthorized" }, 401);
-        }
-        if (url.endsWith("/admin/session")) {
-          return jsonResponse({ detail: "Forbidden" }, 403);
-        }
-        throw new Error(`Unexpected fetch: ${url}`);
-      }),
-    );
+  it("reports a non-admin Google account without a sign-in loop", async () => {
+    mockAdminFetch(() => jsonResponse({ detail: "Forbidden" }, 403));
 
     render(<AdminRoomsPage />);
-    await screen.findByText("Admin entry");
-    fireEvent.click(screen.getByRole("button", { name: "Sign in with Google" }));
-    // Simulate Firebase auth reporting a signed-in user (non-admin).
-    mockAuthCallback.current?.({ uid: "user-1" });
+    mockAuthCallback.current?.(null);
+    fireEvent.click(await screen.findByRole("button", { name: "Sign in with Google" }));
+    mockAuthCallback.current?.({
+      uid: "user-2",
+      email: "player@example.com",
+    });
 
-    expect(await screen.findByText("This account is not an admin.")).toBeTruthy();
+    expect(await screen.findByText("Not an admin")).toBeTruthy();
+    expect(
+      screen.getByText(/Signed in as player@example.com/),
+    ).toBeTruthy();
+    expect(
+      screen.getByRole("button", { name: "Use a different account" }),
+    ).toBeTruthy();
+    expect(signInWithGoogle).toHaveBeenCalledTimes(1);
   });
 });

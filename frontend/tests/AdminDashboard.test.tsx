@@ -10,6 +10,17 @@ vi.mock("next/navigation", () => ({
   useRouter: () => ({ push: vi.fn(), replace: vi.fn() }),
 }));
 
+vi.mock("@/lib/auth", () => ({
+  adminFetch: (path: string, init?: RequestInit) => {
+    const base = process.env.NEXT_PUBLIC_BACKEND_URL ?? "http://localhost:8000";
+    return fetch(`${base}${path}`, { ...init, credentials: "include" });
+  },
+  onAuthChange: (cb: (user: unknown) => void) => {
+    cb({ uid: "admin", email: "admin@example.com" });
+    return () => {};
+  },
+}));
+
 import AdminRoomDashboardPage from "../src/app/admin/rooms/[roomId]/page";
 
 function response(status: number, body: unknown) {

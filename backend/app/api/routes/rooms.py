@@ -16,13 +16,13 @@ from ...repositories.interfaces import (
     PlayerRepository,
     RoomRepository,
 )
-from ...services import auth, firestore_publisher, profiles, scoring_service
-from ...services import cookies as cookie_settings
+from ...services import auth, cookies, firestore_publisher, profiles, scoring_service
 from ...services.room_service import RoomService
 
 router = APIRouter()
 
 SESSION_COOKIE_NAME = "Session-Token"
+SESSION_HEADER_NAME = "X-Session-Token"
 # One cookie holds one token per room. Browsers cap a cookie near 4 KB, and each
 # token is 33 characters with its separator, so 100 rooms fits with room to spare.
 MAX_SESSION_TOKENS = 100
@@ -50,6 +50,25 @@ def get_room_session(raw: str | None, room_id: str) -> tuple[str, str] | None:
         if session is not None and session[0] == room_id:
             return session
     return None
+
+
+def get_room_session_token(raw: str | None, room_id: str) -> str | None:
+    """Return the token that maps to one room inside a multi-room cookie."""
+    for token in split_session_tokens(raw):
+        session = _sessions.get(token)
+        if session is not None and session[0] == room_id:
+            return token
+    return None
+
+
+def session_token_from_request(
+    request: Request, cookie_value: str | None = None
+) -> str | None:
+    """Prefer the explicit header token, falling back to the legacy cookie."""
+    header_value = request.headers.get(SESSION_HEADER_NAME)
+    if header_value and header_value.strip():
+        return header_value.strip()
+    return cookie_value
 
 
 def _cookie_value(raw: str | None, room_id: str, token: str) -> str:
@@ -155,7 +174,8 @@ def join_room(roomId: str, body: JoinRequest, response: Response, request: Reque
         _sync_room_identities(roomId)
         identity = _identity_for(desired_name)
 
-        session = get_room_session(session_token, roomId)
+        raw_token = session_token_from_request(request, session_token)
+        session = get_room_session(raw_token, roomId)
         if session is not None:
             existing = player_repository.get(roomId, session[1])
             if (
@@ -164,7 +184,11 @@ def join_room(roomId: str, body: JoinRequest, response: Response, request: Reque
             ):
                 if _apply_identity_color(roomId, existing, identity.color):
                     firestore_publisher.publish_room(roomId)
-                return {"playerId": existing.playerId, "color": existing.color}
+                return {
+                    "playerId": existing.playerId,
+                    "color": existing.color,
+                    "sessionToken": get_room_session_token(raw_token, roomId),
+                }
 
         reclaimed = next(
             (
@@ -198,13 +222,15 @@ def join_room(roomId: str, body: JoinRequest, response: Response, request: Reque
         response.set_cookie(
             key=SESSION_COOKIE_NAME,
             value=_cookie_value(session_token, roomId, token),
-            httponly=True,
-            secure=cookie_settings.secure(),
-            samesite=cookie_settings.samesite(),
+            **cookies.session_cookie_kwargs(),
         )
     if changed or reclaimed is None:
         firestore_publisher.publish_room(roomId)
-    return {"playerId": player.playerId, "color": player.color}
+    return {
+        "playerId": player.playerId,
+        "color": player.color,
+        "sessionToken": token,
+    }
 
 
 @router.get("/rooms")
@@ -226,11 +252,13 @@ def get_room_state(roomId: str):
 @router.get("/rooms/{roomId}/me")
 def get_room_player(
     roomId: str,
+    request: Request,
     session_token: str | None = Cookie(default=None, alias="Session-Token"),
 ):
-    if session_token is None:
+    raw_token = session_token_from_request(request, session_token)
+    if raw_token is None:
         raise HTTPException(status_code=401, detail="Unauthorized")
-    session = get_room_session(session_token, roomId)
+    session = get_room_session(raw_token, roomId)
     if session is None:
         raise HTTPException(status_code=401, detail="Unauthorized")
     player = player_repository.get(roomId, session[1])

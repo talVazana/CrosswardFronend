@@ -67,6 +67,23 @@ async function authHeaders(): Promise<Record<string, string>> {
   return { Authorization: `Bearer ${token}` };
 }
 
+export async function adminFetch(
+  path: string,
+  init: RequestInit = {},
+): Promise<Response> {
+  const token = await getIdToken();
+  if (!token) {
+    throw new Error("Not signed in");
+  }
+  const headers = new Headers(init.headers);
+  headers.set("Authorization", `Bearer ${token}`);
+  return fetch(`${base}${path}`, {
+    ...init,
+    headers,
+    credentials: "include",
+  });
+}
+
 export type Profile = { email: string; nickname: string | null };
 
 export async function getProfile(): Promise<Profile> {

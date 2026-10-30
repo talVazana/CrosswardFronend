@@ -1,5 +1,13 @@
 import { describe, it, expect, vi, afterEach, beforeEach } from "vitest";
 import { render, screen, fireEvent, cleanup, waitFor } from "@testing-library/react";
+
+vi.mock("@/lib/auth", () => ({
+  adminFetch: (path: string, init?: RequestInit) => {
+    const base = process.env.NEXT_PUBLIC_BACKEND_URL ?? "http://localhost:8000";
+    return fetch(`${base}${path}`, { ...init, credentials: "include" });
+  },
+}));
+
 import AdminCrossword from "../src/components/AdminCrossword";
 import type { Puzzle } from "../src/components/CrosswordGrid";
 

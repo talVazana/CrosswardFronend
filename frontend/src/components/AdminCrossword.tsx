@@ -4,6 +4,7 @@ import { CSSProperties, KeyboardEvent, useMemo, useState } from "react";
 import type { Clue, Puzzle } from "@/components/CrosswordGrid";
 import { build2DGrid, type Cell } from "@/utils/grid";
 import { cellKey, cellsForClue, softColor } from "@/utils/crossword";
+import { adminFetch } from "@/lib/auth";
 
 type Direction = "across" | "down";
 
@@ -186,13 +187,11 @@ export default function AdminCrossword({
     setError(null);
     setNotice(null);
     try {
-      const base = process.env.NEXT_PUBLIC_BACKEND_URL ?? "http://localhost:8000";
-      const res = await fetch(
-        `${base}/admin/puzzles/${puzzle.puzzleId}/clues/${activeClue.clueId}/answer`,
+      const res = await adminFetch(
+        `/admin/puzzles/${puzzle.puzzleId}/clues/${activeClue.clueId}/answer`,
         {
           method: "PUT",
           headers: { "Content-Type": "application/json" },
-          credentials: "include",
           body: JSON.stringify({ answer: activeAnswer }),
         },
       );

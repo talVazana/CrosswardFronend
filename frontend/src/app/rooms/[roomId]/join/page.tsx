@@ -4,6 +4,7 @@ import { FormEvent, useEffect, useState } from "react";
 import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
 import { onAuthChange, getIdToken, getProfile, saveProfile, signInWithGoogle } from "@/lib/auth";
+import { roomFetch, setRoomSessionToken } from "@/lib/roomSession";
 
 export default function JoinPage() {
   const router = useRouter();
@@ -18,8 +19,6 @@ export default function JoinPage() {
   const [nickname, setNickname] = useState<string | null>(null);
   const [nicknameDraft, setNicknameDraft] = useState("");
   const [authBusy, setAuthBusy] = useState(false);
-
-  const base = process.env.NEXT_PUBLIC_BACKEND_URL ?? "http://localhost:8000";
 
   useEffect(() => {
     const unsubscribe = onAuthChange(async (user) => {
@@ -43,16 +42,21 @@ export default function JoinPage() {
     setError(null);
     try {
       const token = await getIdToken();
-      const res = await fetch(`${base}/rooms/${roomId}/join`, {
+      const res = await roomFetch(roomId, `/rooms/${roomId}/join`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
           Authorization: `Bearer ${token ?? ""}`,
         },
-        credentials: "include",
         body: JSON.stringify({ displayName: nickname ?? "player" }),
       });
       if (res.ok) {
+        const body = (await res.json().catch(() => ({}))) as {
+          sessionToken?: unknown;
+        };
+        if (typeof body.sessionToken === "string") {
+          setRoomSessionToken(roomId, body.sessionToken);
+        }
         router.push(`/rooms/${roomId}`);
         return;
       }
@@ -82,13 +86,18 @@ export default function JoinPage() {
     }
     setSubmitting(true);
     try {
-      const res = await fetch(`${base}/rooms/${roomId}/join`, {
+      const res = await roomFetch(roomId, `/rooms/${roomId}/join`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        credentials: "include",
         body: JSON.stringify({ displayName }),
       });
       if (res.ok) {
+        const body = (await res.json().catch(() => ({}))) as {
+          sessionToken?: unknown;
+        };
+        if (typeof body.sessionToken === "string") {
+          setRoomSessionToken(roomId, body.sessionToken);
+        }
         router.push(`/rooms/${roomId}`);
         return;
       }

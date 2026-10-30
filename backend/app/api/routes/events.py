@@ -12,7 +12,9 @@ router = APIRouter()
 def _resolve_member(request: Request, room_id: str):
     if rooms_module.room_repository.get(room_id) is None:
         raise HTTPException(status_code=404, detail="Room not found")
-    session_token = request.cookies.get(rooms_module.SESSION_COOKIE_NAME)
+    session_token = rooms_module.session_token_from_request(
+        request, request.cookies.get(rooms_module.SESSION_COOKIE_NAME)
+    )
     if session_token is None:
         raise HTTPException(status_code=401, detail="Unauthorized")
     session = rooms_module.get_room_session(session_token, room_id)

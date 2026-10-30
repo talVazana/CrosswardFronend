@@ -6,7 +6,12 @@ import { useRouter } from "next/navigation";
 import EmptyState from "@/components/ui/EmptyState";
 import ErrorMessage from "@/components/ui/ErrorMessage";
 import LoadingSpinner from "@/components/ui/LoadingSpinner";
-import { getIdToken, onAuthChange, signInWithGoogle } from "@/lib/auth";
+import {
+  adminFetch,
+  onAuthChange,
+  signInWithGoogle,
+  signOutGoogle,
+} from "@/lib/auth";
 import {
   RoomSummary,
   isRoomActive,
@@ -81,7 +86,10 @@ export default function AdminRoomsPage() {
   const [rooms, setRooms] = useState<RoomSummary[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [unauthorized, setUnauthorized] = useState(false);
+  const [authState, setAuthState] = useState<
+    "checking" | "signed-out" | "not-admin" | "admin"
+  >("checking");
+  const [accountEmail, setAccountEmail] = useState<string | null>(null);
   const [signingIn, setSigningIn] = useState(false);
   const [signInError, setSignInError] = useState<string | null>(null);
   const [roomTitle, setRoomTitle] = useState("");
@@ -89,15 +97,13 @@ export default function AdminRoomsPage() {
   const [creating, setCreating] = useState(false);
   const [createError, setCreateError] = useState<string | null>(null);
 
-  const base = process.env.NEXT_PUBLIC_BACKEND_URL ?? "http://localhost:8000";
-
   const loadRooms = useCallback(async () => {
     setLoading(true);
     setError(null);
     try {
-      const res = await fetch(`${base}/admin/rooms`, { credentials: "include" });
+      const res = await adminFetch("/admin/rooms");
       if (res.status === 401 || res.status === 403) {
-        setUnauthorized(true);
+        setAuthState(res.status === 403 ? "not-admin" : "signed-out");
         setRooms([]);
         return;
       }
@@ -107,54 +113,80 @@ export default function AdminRoomsPage() {
       }
       const body = await res.json();
       setRooms(Array.isArray(body) ? (body as RoomSummary[]) : []);
-      setUnauthorized(false);
-    } catch {
+      setAuthState("admin");
+    } catch (err) {
+      if (err instanceof Error && err.message === "Not signed in") {
+        setAuthState("signed-out");
+        return;
+      }
+      setAuthState("admin");
       setError("Network error while loading rooms.");
     } finally {
       setLoading(false);
     }
-  }, [base]);
+  }, []);
 
-  useEffect(() => {
-    void loadRooms();
+  const verifyAdmin = useCallback(async () => {
+    setAuthState("checking");
+    setSignInError(null);
+    try {
+      const res = await adminFetch("/admin/me");
+      if (res.status === 401) {
+        setAuthState("signed-out");
+        return;
+      }
+      if (res.status === 403) {
+        setAuthState("not-admin");
+        return;
+      }
+      if (!res.ok) {
+        setAuthState("signed-out");
+        setSignInError(`Could not verify admin access (status ${res.status}).`);
+        return;
+      }
+      setAuthState("admin");
+      await loadRooms();
+    } catch (err) {
+      if (err instanceof Error && err.message === "Not signed in") {
+        setAuthState("signed-out");
+        return;
+      }
+      setAuthState("signed-out");
+      setSignInError("Network error while verifying admin access.");
+    }
   }, [loadRooms]);
-
-  const completeSignIn = useCallback(async () => {
-    const token = await getIdToken();
-    if (!token) {
-      setSignInError("Sign-in did not return a token.");
-      return;
-    }
-    const res = await fetch(`${base}/admin/session`, {
-      method: "POST",
-      headers: { Authorization: `Bearer ${token}` },
-      credentials: "include",
-    });
-    if (!res.ok) {
-      setSignInError("This account is not an admin.");
-      setUnauthorized(true);
-      return;
-    }
-    setUnauthorized(false);
-    await loadRooms();
-  }, [base, loadRooms]);
 
   useEffect(() => {
     const unsubscribe = onAuthChange((user) => {
+      setAccountEmail(user?.email ?? null);
       if (user) {
-        void completeSignIn();
+        void verifyAdmin();
       } else {
-        setUnauthorized(true);
+        setAuthState("signed-out");
         setRooms([]);
+        setLoading(false);
       }
     });
     return unsubscribe;
-  }, [completeSignIn]);
+  }, [verifyAdmin]);
 
   const signIn = async () => {
     setSigningIn(true);
     setSignInError(null);
     try {
+      await signInWithGoogle();
+    } catch {
+      setSignInError("Sign-in failed. Please try again.");
+    } finally {
+      setSigningIn(false);
+    }
+  };
+
+  const switchAccount = async () => {
+    setSigningIn(true);
+    setSignInError(null);
+    try {
+      await signOutGoogle();
       await signInWithGoogle();
     } catch {
       setSignInError("Sign-in failed. Please try again.");
@@ -174,12 +206,11 @@ export default function AdminRoomsPage() {
     try {
       const bytes = await imageFile.arrayBuffer();
       const title = roomTitle.trim() || "New Room";
-      const res = await fetch(
-        `${base}/admin/rooms?title=${encodeURIComponent(title)}`,
+      const res = await adminFetch(
+        `/admin/rooms?title=${encodeURIComponent(title)}`,
         {
           method: "POST",
           headers: { "Content-Type": "application/octet-stream" },
-          credentials: "include",
           body: bytes,
         },
       );
@@ -226,7 +257,9 @@ export default function AdminRoomsPage() {
         </div>
       </header>
 
-      {unauthorized ? (
+      {authState === "checking" ? (
+        <LoadingSpinner label="Checking admin access..." />
+      ) : authState === "signed-out" ? (
         <section className="glass flex flex-col gap-4 px-6 py-8">
           <div className="flex flex-col gap-2">
             <h2 className="text-2xl font-semibold text-blue-900">Admin entry</h2>
@@ -241,6 +274,30 @@ export default function AdminRoomsPage() {
             className="btn-primary sm:self-start"
           >
             {signingIn ? "Signing in..." : "Sign in with Google"}
+          </button>
+          {signInError ? (
+            <p role="alert" className="text-sm font-medium text-rose-700">
+              {signInError}
+            </p>
+          ) : null}
+        </section>
+      ) : authState === "not-admin" ? (
+        <section className="glass flex flex-col gap-4 px-6 py-8">
+          <div className="flex flex-col gap-2">
+            <h2 className="text-2xl font-semibold text-blue-900">Not an admin</h2>
+            <p className="muted text-sm">
+              {accountEmail
+                ? `Signed in as ${accountEmail}, but this account does not have admin access.`
+                : "This account does not have admin access."}
+            </p>
+          </div>
+          <button
+            type="button"
+            onClick={() => void switchAccount()}
+            disabled={signingIn}
+            className="btn-primary sm:self-start"
+          >
+            {signingIn ? "Signing in..." : "Use a different account"}
           </button>
           {signInError ? (
             <p role="alert" className="text-sm font-medium text-rose-700">

@@ -9,8 +9,7 @@ from ...models.gameplay import SubmissionStatus
 from ...models.room import Player, Room, RoomStatus
 from ...repositories.in_memory import InMemoryAnswerRepository
 from ...repositories.interfaces import AnswerRepository
-from ...services import auth, firestore_publisher, telegram_notifier
-from ...services import cookies as cookie_settings
+from ...services import auth, cookies, firestore_publisher, telegram_notifier
 from ...services import scoring_service
 from ...services.puzzle_image_processor import PuzzleProcessingError, process_image
 from ...services.puzzle_utils import normalize_answer
@@ -39,6 +38,19 @@ class AnswerRequest(BaseModel):
 
 
 def _resolve_admin(request: Request):
+    # A Google ID token is the primary admin credential. Cookie sessions stay
+    # supported for older clients, but the token must be checked first so an
+    # unrelated player cookie cannot block a valid admin.
+    auth_error: HTTPException | None = None
+    if request.headers.get(auth.AUTH_HEADER):
+        try:
+            email = auth.require_admin(request)
+            return SimpleNamespace(playerId="admin", displayName=email, role="admin")
+        except HTTPException as exc:
+            if exc.status_code not in (401, 403):
+                raise
+            auth_error = exc
+
     admin_cookie = request.cookies.get(ADMIN_SESSION_COOKIE_NAME)
     if admin_cookie is not None and admin_cookie in _admin_auth_tokens:
         return SimpleNamespace(playerId="admin", displayName="Admin", role="admin")
@@ -51,7 +63,12 @@ def _resolve_admin(request: Request):
             request.cookies.get(rooms_module.SESSION_COOKIE_NAME)
         )
     )
+    header_token = request.headers.get(rooms_module.SESSION_HEADER_NAME)
+    if header_token and header_token.strip():
+        tokens.append(header_token.strip())
     if not tokens:
+        if auth_error is not None:
+            raise auth_error
         raise HTTPException(status_code=401, detail="Unauthorized")
 
     for token in tokens:
@@ -63,6 +80,8 @@ def _resolve_admin(request: Request):
             return player
     if any(token in rooms_module._sessions for token in tokens):
         raise HTTPException(status_code=403, detail="Forbidden")
+    if auth_error is not None:
+        raise auth_error
     raise HTTPException(status_code=401, detail="Unauthorized")
 
 
@@ -75,9 +94,7 @@ def create_admin_session(request: Request, response: Response):
     response.set_cookie(
         key=ADMIN_SESSION_COOKIE_NAME,
         value=token,
-        httponly=True,
-        secure=cookie_settings.secure(),
-        samesite=cookie_settings.samesite(),
+        **cookies.session_cookie_kwargs(),
     )
     return {"roomId": None, "playerId": "admin", "displayName": email}
 

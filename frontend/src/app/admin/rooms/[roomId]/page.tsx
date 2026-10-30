@@ -11,6 +11,7 @@ import type { Puzzle } from "@/components/CrosswordGrid";
 import LoadingSpinner from "@/components/ui/LoadingSpinner";
 import ErrorMessage from "@/components/ui/ErrorMessage";
 import EmptyState from "@/components/ui/EmptyState";
+import { adminFetch, onAuthChange } from "@/lib/auth";
 
 type RoomStatus = "draft" | "lobby" | "active" | "paused" | "finished" | "closed";
 
@@ -85,7 +86,10 @@ export default function AdminRoomDashboardPage() {
   const [room, setRoom] = useState<AdminRoomState | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [unauthorized, setUnauthorized] = useState(false);
+  const [authState, setAuthState] = useState<
+    "checking" | "signed-out" | "not-admin" | "admin"
+  >("checking");
+  const [accountEmail, setAccountEmail] = useState<string | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
   const [busy, setBusy] = useState<LifecycleAction | null>(null);
   const [approving, setApproving] = useState<string | null>(null);
@@ -96,18 +100,14 @@ export default function AdminRoomDashboardPage() {
     if (showSpinner) setLoading(true);
     setError(null);
     try {
-      const base = process.env.NEXT_PUBLIC_BACKEND_URL ?? "http://localhost:8000";
-      const res = await fetch(`${base}/admin/rooms/${roomId}`, {
-        credentials: "include",
-      });
+      const res = await adminFetch(`/admin/rooms/${roomId}`);
       if (res.status === 401 || res.status === 403) {
-        setUnauthorized(true);
+        setAuthState(res.status === 403 ? "not-admin" : "signed-out");
         return;
       }
       if (res.status === 404) {
-        let stateRes = await fetch(`${base}/rooms/${roomId}/state`, {
-          credentials: "include",
-        });
+        setAuthState("admin");
+        const stateRes = await adminFetch(`/rooms/${roomId}/state`);
         if (!stateRes.ok) {
           setError("Room not found");
           return;
@@ -120,7 +120,13 @@ export default function AdminRoomDashboardPage() {
         return;
       }
       setRoom((await res.json()) as AdminRoomState);
-    } catch {
+      setAuthState("admin");
+    } catch (err) {
+      if (err instanceof Error && err.message === "Not signed in") {
+        setAuthState("signed-out");
+        return;
+      }
+      setAuthState("admin");
       setError("Network error. Please try again.");
     } finally {
       if (showSpinner) setLoading(false);
@@ -128,7 +134,16 @@ export default function AdminRoomDashboardPage() {
   }, [roomId]);
 
   useEffect(() => {
-    load();
+    const unsubscribe = onAuthChange((user) => {
+      setAccountEmail(user?.email ?? null);
+      if (user) {
+        void load();
+      } else {
+        setAuthState("signed-out");
+        setLoading(false);
+      }
+    });
+    return unsubscribe;
   }, [load]);
 
   const triggerAction = useCallback(
@@ -143,10 +158,8 @@ export default function AdminRoomDashboardPage() {
       setBusy(action);
       setActionError(null);
       try {
-        const base = process.env.NEXT_PUBLIC_BACKEND_URL ?? "http://localhost:8000";
-        const res = await fetch(`${base}/admin/rooms/${roomId}/${action}`, {
+        const res = await adminFetch(`/admin/rooms/${roomId}/${action}`, {
           method: "POST",
-          credentials: "include",
         });
         if (res.ok) {
           await load();
@@ -179,13 +192,11 @@ export default function AdminRoomDashboardPage() {
       setApproving(key);
       setActionError(null);
       try {
-        const base = process.env.NEXT_PUBLIC_BACKEND_URL ?? "http://localhost:8000";
-        const res = await fetch(
-          `${base}/admin/puzzles/${room.puzzleId}/clues/${submission.clueId}/answer`,
+        const res = await adminFetch(
+          `/admin/puzzles/${room.puzzleId}/clues/${submission.clueId}/answer`,
           {
             method: "PUT",
             headers: { "Content-Type": "application/json" },
-            credentials: "include",
             body: JSON.stringify({ answer: submission.answer }),
           },
         );
@@ -219,12 +230,10 @@ export default function AdminRoomDashboardPage() {
       setRejecting(key);
       setActionError(null);
       try {
-        const base = process.env.NEXT_PUBLIC_BACKEND_URL ?? "http://localhost:8000";
-        const res = await fetch(
-          `${base}/admin/rooms/${roomId}/submissions/${submission.submissionId}/reject`,
+        const res = await adminFetch(
+          `/admin/rooms/${roomId}/submissions/${submission.submissionId}/reject`,
           {
             method: "POST",
-            credentials: "include",
           },
         );
         if (!res.ok) {
@@ -274,19 +283,33 @@ export default function AdminRoomDashboardPage() {
 
   return (
     <main className="mx-auto flex min-h-screen w-full max-w-3xl flex-col gap-6 p-6">
-      {loading ? (
+      {authState === "checking" ? (
         <LoadingSpinner />
-      ) : unauthorized ? (
+      ) : authState === "signed-out" ? (
         <section className="glass flex flex-col gap-3 px-6 py-8">
           <h1 className="text-2xl font-semibold text-blue-900">Admin sign-in required</h1>
           <p className="muted text-sm">
-            This dashboard is only available to administrators. Sign in with the
-            admin session token to continue.
+            This dashboard is only available to administrators. Sign in to
+            continue.
           </p>
           <Link href="/admin/rooms" className="btn-primary w-fit text-sm">
             Go to admin entry
           </Link>
         </section>
+      ) : authState === "not-admin" ? (
+        <section className="glass flex flex-col gap-3 px-6 py-8">
+          <h1 className="text-2xl font-semibold text-blue-900">Not an admin</h1>
+          <p className="muted text-sm">
+            {accountEmail
+              ? `Signed in as ${accountEmail}, but this account does not have admin access.`
+              : "This account does not have admin access."}
+          </p>
+          <Link href="/" className="btn-primary w-fit text-sm">
+            Back to site
+          </Link>
+        </section>
+      ) : loading ? (
+        <LoadingSpinner />
       ) : error ? (
         <ErrorMessage message={error} onRetry={load} />
       ) : room ? (

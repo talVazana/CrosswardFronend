@@ -10,6 +10,7 @@ import LoadingSpinner from "@/components/ui/LoadingSpinner";
 import ErrorMessage from "@/components/ui/ErrorMessage";
 import EmptyState from "@/components/ui/EmptyState";
 import { subscribeRoom, type RoomDoc } from "@/lib/roomsStore";
+import { roomFetch } from "@/lib/roomSession";
 
 const STATUS_LABELS: Record<string, string> = {
   draft: "Draft",
@@ -42,10 +43,7 @@ export default function RoomLobbyPage() {
 
   const loadPlayerProgress = useCallback(async () => {
     try {
-      const base = process.env.NEXT_PUBLIC_BACKEND_URL ?? "http://localhost:8000";
-      const res = await fetch(`${base}/rooms/${roomId}/player-progress`, {
-        credentials: "include",
-      });
+      const res = await roomFetch(roomId, `/rooms/${roomId}/player-progress`);
       if (!res.ok) return;
       const body = (await res.json()) as {
         solved?: unknown;
@@ -135,11 +133,7 @@ export default function RoomLobbyPage() {
     let cancelled = false;
     const loadMe = async () => {
       try {
-        const base = process.env.NEXT_PUBLIC_BACKEND_URL ?? "http://localhost:8000";
-        const res = await fetch(`${base}/rooms/${roomId}/me`, {
-          credentials: "include",
-          cache: "no-store",
-        });
+        const res = await roomFetch(roomId, `/rooms/${roomId}/me`);
         if (!res.ok) return;
         const body = (await res.json()) as {
           playerId?: unknown;

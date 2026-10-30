@@ -1,4 +1,5 @@
 import json
+import os
 import re
 import secrets
 from pathlib import Path
@@ -18,6 +19,25 @@ from . import rooms as rooms_module
 from . import submissions as submissions_module
 
 router = APIRouter()
+
+
+def _test_endpoints_enabled() -> bool:
+    """Test helpers are local-only unless explicitly enabled.
+
+    Production (``FIRESTORE_MODE=production``) keeps them off so nobody can wipe
+    live rooms. Pytest and local Playwright runs keep them on by default.
+    """
+    if os.environ.get("PYTEST_CURRENT_TEST"):
+        return True
+    raw = os.environ.get("ENABLE_TEST_ENDPOINTS")
+    if raw is None:
+        return os.environ.get("FIRESTORE_MODE", "").strip().lower() != "production"
+    return raw.strip().lower() in {"1", "true", "yes", "on"}
+
+
+def _require_test_endpoints() -> None:
+    if not _test_endpoints_enabled():
+        raise HTTPException(status_code=404, detail="Not found")
 
 REAL_PUZZLE_PATH = (
     Path(__file__).resolve().parents[4]
@@ -132,6 +152,7 @@ class E2ESeedRequest(BaseModel):
 
 @router.post("/e2e/seed", status_code=201)
 def seed_room(body: E2ESeedRequest):
+    _require_test_endpoints()
     answers_provided = body.officialAnswers is not None
     puzzle = body.puzzle
     official_answers = body.officialAnswers
@@ -195,6 +216,7 @@ def seed_room(body: E2ESeedRequest):
 @router.post("/test/reset")
 def reset_all_state():
     """Wipe all in-memory state for test isolation."""
+    _require_test_endpoints()
     from ...repositories.in_memory import (
         InMemoryAdminSolveRepository,
         InMemoryPlayerIdentityRepository,

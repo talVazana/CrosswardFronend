@@ -7,7 +7,7 @@ import EmptyState from "@/components/ui/EmptyState";
 import ErrorMessage from "@/components/ui/ErrorMessage";
 import LoadingSpinner from "@/components/ui/LoadingSpinner";
 import { subscribeRooms } from "@/lib/roomsStore";
-import { getIdToken, getProfile, onAuthChange, saveProfile, signInWithGoogle, signOutGoogle } from "@/lib/auth";
+import { adminFetch, getIdToken, getProfile, onAuthChange, saveProfile, signInWithGoogle, signOutGoogle } from "@/lib/auth";
 import {
   RoomSummary,
   isRoomActive,
@@ -315,6 +315,7 @@ export default function Page() {
       setSignedIn(Boolean(user));
       if (!user) {
         setIsGod(false);
+        setIsAdmin(false);
         setNickname(null);
         return;
       }
@@ -326,22 +327,17 @@ export default function Page() {
           });
           setIsGod(godRes.ok);
         }
+        const adminRes = await adminFetch("/admin/me");
+        setIsAdmin(adminRes.ok);
         const profile = await getProfile();
         setNickname(profile.nickname);
       } catch {
         setIsGod(false);
+        setIsAdmin(false);
         setNickname(null);
       }
     });
     return unsubscribe;
-  }, [base]);
-
-  useEffect(() => {
-    fetch(`${base}/admin/me`, { credentials: "include" })
-      .then((res) => {
-        if (res.ok) setIsAdmin(true);
-      })
-      .catch(() => {});
   }, [base]);
 
   useEffect(() => {
@@ -371,9 +367,8 @@ export default function Page() {
     if (!confirmed) return;
     setRemovingRoomId(targetRoomId);
     try {
-      await fetch(`${base}/admin/rooms/${targetRoomId}`, {
+      await adminFetch(`/admin/rooms/${targetRoomId}`, {
         method: "DELETE",
-        credentials: "include",
       });
     } catch {
       // ignore; the gallery refreshes via Firestore once the room is gone

@@ -202,3 +202,49 @@ def test_admin_google_login_rejects_non_admin(client, env, player_headers):
 
     assert response.status_code == 403
     assert client.cookies.get("Admin-Session-Token") is None
+
+
+def test_admin_bearer_token_grants_gallery_without_cookie(client, env, admin_headers):
+    response = client.get("/admin/rooms", headers=admin_headers)
+
+    assert response.status_code == 200, response.text
+    assert len(response.json()) == 4
+    assert client.cookies.get("Admin-Session-Token") is None
+
+
+def test_admin_bearer_token_rejects_non_admin(client, env, player_headers):
+    response = client.get("/admin/rooms", headers=player_headers)
+
+    assert response.status_code == 403
+    assert client.cookies.get("Admin-Session-Token") is None
+
+
+def test_player_header_token_works_without_cookie(client, env):
+    client.cookies.clear()
+
+    response = client.get(
+        f"/rooms/{ACTIVE_ROOM}/me",
+        headers={rooms_module.SESSION_HEADER_NAME: PLAYER_TOKEN},
+    )
+
+    assert response.status_code == 200, response.text
+    assert response.json()["playerId"] == PLAYER_ID
+
+
+def test_join_returns_header_session_token(client, env):
+    response = client.post(
+        f"/rooms/{LOBBY_ROOM}/join", json={"displayName": "Header Player"}
+    )
+
+    assert response.status_code == 200, response.text
+    token = response.json()["sessionToken"]
+    assert token
+    assert token in env.sessions
+
+    client.cookies.clear()
+    me = client.get(
+        f"/rooms/{LOBBY_ROOM}/me",
+        headers={rooms_module.SESSION_HEADER_NAME: token},
+    )
+    assert me.status_code == 200, me.text
+    assert me.json()["displayName"] == "Header Player"
