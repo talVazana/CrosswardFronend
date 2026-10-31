@@ -7,7 +7,10 @@ import AdminCrossword from "@/components/AdminCrossword";
 import ClueList from "@/components/ClueList";
 import Scoreboard from "@/components/Scoreboard";
 import type { Participant } from "@/components/ParticipantList";
-import type { Puzzle } from "@/components/CrosswordGrid";
+import type {
+  ClueSelectionRequest,
+  Puzzle,
+} from "@/components/CrosswordGrid";
 import LoadingSpinner from "@/components/ui/LoadingSpinner";
 import ErrorMessage from "@/components/ui/ErrorMessage";
 import EmptyState from "@/components/ui/EmptyState";
@@ -94,7 +97,17 @@ export default function AdminRoomDashboardPage() {
   const [busy, setBusy] = useState<LifecycleAction | null>(null);
   const [approving, setApproving] = useState<string | null>(null);
   const [rejecting, setRejecting] = useState<string | null>(null);
+  const [clueSelection, setClueSelection] =
+    useState<ClueSelectionRequest | null>(null);
+  const [activeClueId, setActiveClueId] = useState<string | null>(null);
   const lastActionRef = useRef<LifecycleAction | null>(null);
+
+  const handleSelectClue = useCallback((clue: { clueId: string }) => {
+    setClueSelection((prev) => ({
+      clueId: clue.clueId,
+      nonce: (prev?.nonce ?? 0) + 1,
+    }));
+  }, []);
 
   const load = useCallback(async (showSpinner = true) => {
     if (showSpinner) setLoading(true);
@@ -384,6 +397,8 @@ export default function AdminRoomDashboardPage() {
                 puzzle={room.puzzle}
                 solvedClues={solvedClues}
                 officialAnswers={room.officialAnswers}
+                selectionRequest={clueSelection}
+                onActiveClueChange={setActiveClueId}
                 onApproved={() => load(false)}
               />
             </section>
@@ -394,8 +409,10 @@ export default function AdminRoomDashboardPage() {
               <h2 className="text-lg font-semibold text-blue-800">Clues</h2>
               <ClueList
                 clues={displayClues}
+                activeClueId={activeClueId}
                 solvedClueIds={solvedClueIds}
                 submittedClueIds={submittedClueIds}
+                onSelectClue={handleSelectClue}
               />
             </section>
           ) : null}

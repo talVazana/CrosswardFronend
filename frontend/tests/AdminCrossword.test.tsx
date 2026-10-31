@@ -112,4 +112,32 @@ describe("Admin crossword drafting and approval", () => {
       (screen.getByRole("button", { name: "Approve answer" }) as HTMLButtonElement).disabled,
     ).toBe(true);
   });
+
+  it("accepts letters from the hidden input for mobile keyboards", () => {
+    vi.stubGlobal("fetch", vi.fn());
+    render(<AdminCrossword puzzle={puzzle} />);
+    fireEvent.click(screen.getByTestId("admin-cell-0-2"));
+
+    const input = screen.getByTestId("admin-crossword-input");
+    for (const letter of "CAT") {
+      fireEvent.change(input, { target: { value: letter } });
+    }
+    expect(screen.getByTestId("admin-cell-0-2").textContent).toContain("C");
+    expect(screen.getByTestId("admin-cell-0-1").textContent).toContain("A");
+    expect(screen.getByTestId("admin-cell-0-0").textContent).toContain("T");
+    expect(
+      (screen.getByRole("button", { name: "Approve answer" }) as HTMLButtonElement).disabled,
+    ).toBe(false);
+  });
+
+  it("activates a clue selected from the clue list", () => {
+    vi.stubGlobal("fetch", vi.fn());
+    render(
+      <AdminCrossword
+        puzzle={puzzle}
+        selectionRequest={{ clueId: "A1", nonce: 1 }}
+      />,
+    );
+    expect(screen.getByText("1 Across")).toBeTruthy();
+  });
 });

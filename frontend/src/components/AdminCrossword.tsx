@@ -1,7 +1,19 @@
 "use client";
 
-import { CSSProperties, KeyboardEvent, useMemo, useState } from "react";
-import type { Clue, Puzzle } from "@/components/CrosswordGrid";
+import {
+  ChangeEvent,
+  CSSProperties,
+  KeyboardEvent,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
+import type {
+  Clue,
+  ClueSelectionRequest,
+  Puzzle,
+} from "@/components/CrosswordGrid";
 import { build2DGrid, type Cell } from "@/utils/grid";
 import { cellKey, cellsForClue, softColor } from "@/utils/crossword";
 import { adminFetch } from "@/lib/auth";
@@ -12,6 +24,8 @@ interface AdminCrosswordProps {
   puzzle: Puzzle;
   solvedClues?: Record<string, string>;
   officialAnswers?: Record<string, string>;
+  selectionRequest?: ClueSelectionRequest | null;
+  onActiveClueChange?: (clueId: string | null) => void;
   onApproved?: () => void | Promise<void>;
 }
 
@@ -23,6 +37,8 @@ export default function AdminCrossword({
   puzzle,
   solvedClues = {},
   officialAnswers = {},
+  selectionRequest,
+  onActiveClueChange,
   onApproved,
 }: AdminCrosswordProps) {
   const grid = useMemo(
@@ -37,6 +53,8 @@ export default function AdminCrossword({
   const [approving, setApproving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
+  const inputRef = useRef<HTMLInputElement | null>(null);
+  const lastSelectionNonce = useRef<number | null>(null);
 
   const officialLetters = useMemo(() => {
     const result: Record<string, string> = {};
@@ -81,6 +99,11 @@ export default function AdminCrossword({
     ? normalizeAnswer(officialAnswers[activeClue.clueId]).length > 0
     : false;
   const activeSolvedColor = activeClue ? solvedClues[activeClue.clueId] : undefined;
+  const activeClueId = activeClue?.clueId ?? null;
+
+  useEffect(() => {
+    onActiveClueChange?.(activeClueId);
+  }, [activeClueId, onActiveClueChange]);
 
   const handleCellSelect = (row: number, col: number, cell: Cell) => {
     if (cell.type === "black") return;
@@ -109,7 +132,25 @@ export default function AdminCrossword({
     setNextWriteIndex(index >= 0 ? index : 0);
     setError(null);
     setNotice(null);
+    inputRef.current?.focus({ preventScroll: true });
   };
+
+  useEffect(() => {
+    if (!selectionRequest || selectionRequest.nonce === lastSelectionNonce.current) {
+      return;
+    }
+    lastSelectionNonce.current = selectionRequest.nonce;
+    const clue = puzzle.clues.find(
+      (entry) => entry.clueId === selectionRequest.clueId,
+    );
+    if (!clue) return;
+    const cells = cellsForClue(grid, clue);
+    if (cells.length === 0) return;
+    setDirection(clue.direction);
+    const first = cells[0];
+    handleCellSelect(first.row, first.col, first);
+    inputRef.current?.focus({ preventScroll: true });
+  }, [selectionRequest, grid, puzzle.clues, handleCellSelect, setDirection]);
 
   const writeLetter = (letter: string) => {
     if (!activeClue || activeApproved) return;
@@ -150,7 +191,7 @@ export default function AdminCrossword({
     setNotice(null);
   };
 
-  const handleKeyDown = (event: KeyboardEvent<HTMLDivElement>) => {
+  const handleKeyDown = (event: KeyboardEvent<HTMLElement>) => {
     if (!selectedCell || event.ctrlKey || event.metaKey || event.altKey) return;
 
     if (event.key === "Enter") {
@@ -167,6 +208,13 @@ export default function AdminCrossword({
       event.preventDefault();
       writeLetter(event.key.toUpperCase());
     }
+  };
+
+  const handleInputChange = (event: ChangeEvent<HTMLInputElement>) => {
+    const value = event.currentTarget.value;
+    event.currentTarget.value = "";
+    const letter = value.slice(-1);
+    if (letter && letter !== " ") writeLetter(letter.toUpperCase());
   };
 
   async function approve() {
@@ -259,12 +307,27 @@ export default function AdminCrossword({
 
   return (
     <div
-      className="flex flex-col gap-4 rounded-lg outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2"
+      className="relative flex flex-col gap-4 rounded-lg outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2"
       tabIndex={0}
       onKeyDown={handleKeyDown}
       role="application"
       aria-label="Admin crossword grid"
     >
+      <input
+        ref={inputRef}
+        data-testid="admin-crossword-input"
+        aria-label="Admin crossword letter input"
+        className="absolute left-0 top-0 h-px w-px opacity-0"
+        inputMode="text"
+        autoCapitalize="characters"
+        autoCorrect="off"
+        spellCheck={false}
+        onChange={handleInputChange}
+        onKeyDown={(event) => {
+          event.stopPropagation();
+          handleKeyDown(event);
+        }}
+      />
       <div
         dir="ltr"
         className="mx-auto grid w-full max-w-xl gap-0"
