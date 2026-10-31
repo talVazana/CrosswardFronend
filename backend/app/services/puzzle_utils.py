@@ -7,6 +7,28 @@ def normalize_answer(raw_answer: str) -> str:
     return re.sub(r"\s+", " ", raw_answer.strip()).upper()
 
 
+HEBREW_FINAL_TO_REGULAR = {
+    "ך": "כ",
+    "ם": "מ",
+    "ן": "נ",
+    "ף": "פ",
+    "ץ": "צ",
+}
+
+
+def answer_key(raw_answer: str) -> str:
+    """Canonical form used only for equality checks.
+
+    Hebrew final letters (sofit) are folded to their regular forms so that,
+    for example, "שלום" and "שלומ" compare equal. Display values are not
+    changed by this function.
+    """
+    return "".join(
+        HEBREW_FINAL_TO_REGULAR.get(character, character)
+        for character in normalize_answer(raw_answer)
+    )
+
+
 def _cell_at(puzzle: Puzzle, row: int, col: int) -> Cell | None:
     for cell in puzzle.cells:
         if cell.row == row and cell.col == col:

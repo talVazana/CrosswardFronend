@@ -130,6 +130,20 @@ describe("Admin crossword drafting and approval", () => {
     ).toBe(false);
   });
 
+  it("converts Hebrew final letters to regular letters on input", () => {
+    vi.stubGlobal("fetch", vi.fn());
+    render(<AdminCrossword puzzle={puzzle} />);
+    fireEvent.click(screen.getByTestId("admin-cell-0-2"));
+
+    const input = screen.getByTestId("admin-crossword-input");
+    fireEvent.change(input, { target: { value: "ם" } });
+    fireEvent.change(input, { target: { value: "ן" } });
+    fireEvent.change(input, { target: { value: "ץ" } });
+    expect(screen.getByTestId("admin-cell-0-2").textContent).toContain("מ");
+    expect(screen.getByTestId("admin-cell-0-1").textContent).toContain("נ");
+    expect(screen.getByTestId("admin-cell-0-0").textContent).toContain("צ");
+  });
+
   it("activates a clue selected from the clue list", () => {
     vi.stubGlobal("fetch", vi.fn());
     render(

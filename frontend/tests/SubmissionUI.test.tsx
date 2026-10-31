@@ -265,6 +265,17 @@ describe("TASK-025 submission UI", () => {
     expect(screen.getByText("1 Across")).toBeTruthy();
   });
 
+  it("converts Hebrew final letters to regular letters on input", () => {
+    renderGrid();
+    const input = screen.getByTestId("crossword-input");
+    fireEvent.change(input, { target: { value: "ם" } });
+    fireEvent.change(input, { target: { value: "ן" } });
+    fireEvent.change(input, { target: { value: "ץ" } });
+    expect(screen.getByTestId("cell-0-2").textContent).toContain("מ");
+    expect(screen.getByTestId("cell-0-1").textContent).toContain("נ");
+    expect(screen.getByTestId("cell-0-0").textContent).toContain("צ");
+  });
+
   it("restores a pending answer and shows Waiting for Admin", () => {
     render(
       <CrosswordGrid

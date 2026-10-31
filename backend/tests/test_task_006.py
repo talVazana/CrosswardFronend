@@ -1,5 +1,5 @@
 from app.models.puzzle import Cell, Clue, Puzzle
-from app.services.puzzle_utils import normalize_answer, validate_puzzle_structure
+from app.services.puzzle_utils import answer_key, normalize_answer, validate_puzzle_structure
 
 
 def cell(row, col, cell_type="white", number=None, starts_across=False, starts_down=False):
@@ -125,6 +125,31 @@ def test_normalize_empty_string_returns_empty_string():
 
 def test_normalize_preserves_hebrew_letters():
     assert normalize_answer("   שלום   ") == "שלום"
+
+
+def test_answer_key_folds_hebrew_final_letters_to_regular():
+    pairs = [
+        ("ך", "כ"),
+        ("ם", "מ"),
+        ("ן", "נ"),
+        ("ף", "פ"),
+        ("ץ", "צ"),
+    ]
+    for final, regular in pairs:
+        assert answer_key(final) == answer_key(regular)
+
+
+def test_answer_key_matches_final_and_regular_words():
+    assert answer_key("שלום") == answer_key("שלומ")
+    assert answer_key("דרך") == answer_key("דרכ")
+    assert answer_key("סוף") == answer_key("סופ")
+    assert answer_key("ארץ") == answer_key("ארצ")
+    assert answer_key("בן") == answer_key("בנ")
+
+
+def test_answer_key_keeps_regular_letters_and_spacing():
+    assert answer_key("שלומ") == "שלומ"
+    assert answer_key("  שלום  ") == answer_key("שלומ")
 
 
 def test_all_black_grid_is_invalid():

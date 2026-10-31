@@ -10,7 +10,7 @@ from ...repositories.in_memory import InMemorySubmissionRepository
 from ...repositories.interfaces import SubmissionRepository
 from ...services import firestore_publisher
 from ...services import scoring_service
-from ...services.puzzle_utils import normalize_answer
+from ...services.puzzle_utils import answer_key, normalize_answer
 from . import admin as admin_module
 from . import drafts as drafts_module
 from . import events as events_module
@@ -69,7 +69,7 @@ def submit_answer(roomId: str, clueId: str, body: SubmissionRequest, request: Re
 
     if official_answer is None:
         status = SubmissionStatus.pending
-    elif normalize_answer(body.answer) == official_answer:
+    elif answer_key(body.answer) == answer_key(official_answer):
         status = SubmissionStatus.correct
     else:
         status = SubmissionStatus.incorrect

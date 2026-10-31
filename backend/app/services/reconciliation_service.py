@@ -1,6 +1,6 @@
 from ..models.gameplay import SubmissionStatus
 from ..services import firestore_publisher, scoring_service
-from ..services.puzzle_utils import normalize_answer
+from ..services.puzzle_utils import answer_key, normalize_answer
 
 
 def reconcile_pending_submissions(room_id: str, clue_id: str, official_answer: str) -> None:
@@ -24,7 +24,7 @@ def reconcile_pending_submissions(room_id: str, clue_id: str, official_answer: s
             player_role = player.role if player else "player"
             player_color = player.color if player else ""
 
-            if normalize_answer(submission.answer) == official_answer:
+            if answer_key(submission.answer) == answer_key(official_answer):
                 drafts_module.mark_clue_scored(
                     room_id,
                     submission.playerId,

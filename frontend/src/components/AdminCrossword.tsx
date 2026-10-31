@@ -15,7 +15,12 @@ import type {
   Puzzle,
 } from "@/components/CrosswordGrid";
 import { build2DGrid, type Cell } from "@/utils/grid";
-import { cellKey, cellsForClue, softColor } from "@/utils/crossword";
+import {
+  cellKey,
+  cellsForClue,
+  softColor,
+  toRegularHebrewLetters,
+} from "@/utils/crossword";
 import { adminFetch } from "@/lib/auth";
 
 type Direction = "across" | "down";
@@ -63,7 +68,8 @@ export default function AdminCrossword({
       if (!answer) continue;
       cellsForClue(grid, clue).forEach((cell, index) => {
         const character = answer[index];
-        if (character) result[cellKey(cell.row, cell.col)] = character;
+        if (character)
+          result[cellKey(cell.row, cell.col)] = toRegularHebrewLetters(character);
       });
     }
     return result;
@@ -160,7 +166,10 @@ export default function AdminCrossword({
     let index = nextWriteIndex;
     if (index < 0 || index >= cells.length) index = 0;
     const target = cells[index];
-    setLetters((prev) => ({ ...prev, [cellKey(target.row, target.col)]: letter }));
+    setLetters((prev) => ({
+      ...prev,
+      [cellKey(target.row, target.col)]: toRegularHebrewLetters(letter),
+    }));
     setSelectedCell({ row: target.row, col: target.col });
     setNextWriteIndex(Math.min(index + 1, cells.length - 1));
     setError(null);

@@ -397,6 +397,29 @@ def test_pending_submission_counts_as_solved_only_after_admin_approval(env):
     }
 
 
+def test_hebrew_final_letter_submission_matches_regular_official(env):
+    client = env["client"]
+    approve(client, "שולחן")
+
+    response = submit(client, TOKEN_A, "שולחנ")
+    assert response.json() == {"status": "correct", "points": 2}
+
+
+def test_reconcile_pending_regular_matches_final_official(env):
+    client = env["client"]
+    assert submit(client, TOKEN_A, "שולחנ").json() == {"status": "pending"}
+
+    approve(client, "שולחן")
+
+    assert progress(client, TOKEN_A) == {
+        "solved": [CLUE_ID],
+        "revealed": [],
+        "answers": {CLUE_ID: "שולחנ"},
+        "pending": [],
+        "rejected": [],
+    }
+
+
 def test_pending_answer_survives_rejoin(env):
     client = env["client"]
 

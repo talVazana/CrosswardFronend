@@ -12,7 +12,12 @@ import {
 } from "react";
 import { useCrosswordSelection, type Direction } from "@/hooks/useCrosswordSelection";
 import { build2DGrid, Cell } from "@/utils/grid";
-import { cellKey, cellsForClue, softColor } from "@/utils/crossword";
+import {
+  cellKey,
+  cellsForClue,
+  softColor,
+  toRegularHebrewLetters,
+} from "@/utils/crossword";
 import { roomFetch } from "@/lib/roomSession";
 
 export interface Clue {
@@ -266,7 +271,10 @@ export default function CrosswordGrid({
         if (!clue) continue;
         cellsForClue(grid, clue).forEach((cell, index) => {
           const char = answer[index];
-          if (char) next[cellKey(cell.row, cell.col)] = char.toUpperCase();
+          if (char)
+            next[cellKey(cell.row, cell.col)] = toRegularHebrewLetters(
+              char.toUpperCase(),
+            );
         });
       }
       return next;
@@ -337,7 +345,10 @@ export default function CrosswordGrid({
       index = selectedIndex >= 0 ? selectedIndex : 0;
     }
     const target = cells[index];
-    setLetters((prev) => ({ ...prev, [cellKey(target.row, target.col)]: letter }));
+    setLetters((prev) => ({
+      ...prev,
+      [cellKey(target.row, target.col)]: toRegularHebrewLetters(letter),
+    }));
     setFeedback(null);
     setLastPoints(null);
     setNextWriteIndex(Math.min(index + 1, cells.length - 1));
@@ -553,7 +564,10 @@ export default function CrosswordGrid({
         const next = { ...prev };
         activeCells.forEach((cell, index) => {
           const char = answer[index];
-          if (char) next[cellKey(cell.row, cell.col)] = char.toUpperCase();
+          if (char)
+            next[cellKey(cell.row, cell.col)] = toRegularHebrewLetters(
+              char.toUpperCase(),
+            );
         });
         return next;
       });

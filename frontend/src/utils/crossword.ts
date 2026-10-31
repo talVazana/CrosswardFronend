@@ -8,6 +8,20 @@ export interface CrosswordClue {
   answerLength: number;
 }
 
+const HEBREW_FINAL_TO_REGULAR: Record<string, string> = {
+  "ך": "כ",
+  "ם": "מ",
+  "ן": "נ",
+  "ף": "פ",
+  "ץ": "צ",
+};
+
+export function toRegularHebrewLetters(value: string): string {
+  return Array.from(value, (character) => HEBREW_FINAL_TO_REGULAR[character] ?? character).join(
+    "",
+  );
+}
+
 export function cellKey(row: number, col: number): string {
   return `${row}-${col}`;
 }
