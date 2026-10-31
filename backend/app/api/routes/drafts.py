@@ -6,6 +6,7 @@ from ...models.room import RoomStatus
 from ...repositories.in_memory import InMemoryPlayerClueStateRepository
 from ...repositories.interfaces import PlayerClueStateRepository
 from ...services import firestore_publisher
+from ...services.puzzle_utils import normalize_answer
 from . import rooms as rooms_module
 
 router = APIRouter()
@@ -104,14 +105,25 @@ def get_player_progress(roomId: str, request: Request):
         if current is None or submission.serverTimestamp >= current.serverTimestamp:
             latest[submission.clueId] = submission
 
+    pending_answers: dict[str, str] = {}
+    pending_clues: list[str] = []
+    for clue_id, submission in latest.items():
+        if submission.status is SubmissionStatus.pending:
+            pending_answers[clue_id] = normalize_answer(submission.answer)
+            pending_clues.append(clue_id)
+
+    answers = {
+        state.clueId: state.solution
+        for state in states
+        if state.solution and (state.scored or state.revealed)
+    }
+    answers.update(pending_answers)
+
     return {
         "solved": sorted(state.clueId for state in states if state.scored),
         "revealed": sorted(state.clueId for state in states if state.revealed),
-        "answers": {
-            state.clueId: state.solution
-            for state in states
-            if state.solution and (state.scored or state.revealed)
-        },
+        "answers": answers,
+        "pending": sorted(pending_clues),
         "rejected": [
             {"clueId": clue_id, "submissionId": submission.submissionId}
             for clue_id, submission in sorted(latest.items())

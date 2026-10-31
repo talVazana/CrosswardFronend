@@ -270,6 +270,7 @@ def test_admin_can_reject_pending_submission_without_scoring(env):
         "solved": [],
         "revealed": [],
         "answers": {},
+        "pending": [],
         "rejected": [
             {"clueId": CLUE_ID, "submissionId": submission_id},
         ],
@@ -341,12 +342,14 @@ def test_player_progress_tracks_only_that_players_solved_and_revealed_clues(env)
         "solved": [CLUE_ID],
         "revealed": [],
         "answers": {CLUE_ID: ANSWER},
+        "pending": [],
         "rejected": [],
     }
     assert progress(client, TOKEN_B) == {
         "solved": [],
         "revealed": [],
         "answers": {},
+        "pending": [],
         "rejected": [],
     }
 
@@ -358,12 +361,14 @@ def test_player_progress_tracks_only_that_players_solved_and_revealed_clues(env)
         "solved": [],
         "revealed": [CLUE_ID],
         "answers": {CLUE_ID: ANSWER},
+        "pending": [],
         "rejected": [],
     }
     assert progress(client, TOKEN_A) == {
         "solved": [CLUE_ID],
         "revealed": [],
         "answers": {CLUE_ID: ANSWER},
+        "pending": [],
         "rejected": [],
     }
 
@@ -376,7 +381,8 @@ def test_pending_submission_counts_as_solved_only_after_admin_approval(env):
     assert progress(client, TOKEN_A) == {
         "solved": [],
         "revealed": [],
-        "answers": {},
+        "answers": {CLUE_ID: ANSWER},
+        "pending": [CLUE_ID],
         "rejected": [],
     }
 
@@ -386,6 +392,29 @@ def test_pending_submission_counts_as_solved_only_after_admin_approval(env):
         "solved": [CLUE_ID],
         "revealed": [],
         "answers": {CLUE_ID: ANSWER},
+        "pending": [],
+        "rejected": [],
+    }
+
+
+def test_pending_answer_survives_rejoin(env):
+    client = env["client"]
+
+    assert submit(client, TOKEN_A).json() == {"status": "pending"}
+
+    client.cookies.clear()
+    rejoined = client.post(
+        f"/rooms/{ROOM_ID}/join", json={"displayName": PLAYER_A}
+    )
+    assert rejoined.status_code == 200, rejoined.text
+    assert rejoined.json()["playerId"] == PLAYER_A
+
+    as_player(client, rejoined.json()["sessionToken"])
+    assert progress(client, rejoined.json()["sessionToken"]) == {
+        "solved": [],
+        "revealed": [],
+        "answers": {CLUE_ID: ANSWER},
+        "pending": [CLUE_ID],
         "rejected": [],
     }
 

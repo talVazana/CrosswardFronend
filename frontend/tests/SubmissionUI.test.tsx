@@ -265,6 +265,23 @@ describe("TASK-025 submission UI", () => {
     expect(screen.getByText("1 Across")).toBeTruthy();
   });
 
+  it("restores a pending answer and shows Waiting for Admin", () => {
+    render(
+      <CrosswordGrid
+        roomId="room-1"
+        puzzle={puzzle}
+        initialAnswers={{ A1: "CAT" }}
+        playerPendingClues={["A1"]}
+      />,
+    );
+    expect(screen.getByTestId("cell-0-2").textContent).toContain("C");
+    expect(screen.getByTestId("cell-0-1").textContent).toContain("A");
+    expect(screen.getByTestId("cell-0-0").textContent).toContain("T");
+    fireEvent.click(screen.getByTestId("cell-0-2"));
+    expect(screen.getByText("Waiting for Admin")).toBeTruthy();
+    expect(getSubmit().disabled).toBe(false);
+  });
+
   it("notifies when the player session is no longer valid", async () => {
     const onUnauthorized = vi.fn();
     vi.stubGlobal("fetch", vi.fn().mockResolvedValue(response(401, {})));

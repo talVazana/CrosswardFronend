@@ -39,8 +39,9 @@ export default function RoomLobbyPage() {
     solved: string[];
     revealed: string[];
     answers: Record<string, string>;
+    pending: string[];
     rejected: { clueId: string; submissionId: string }[];
-  }>({ solved: [], revealed: [], answers: {}, rejected: [] });
+  }>({ solved: [], revealed: [], answers: {}, pending: [], rejected: [] });
   const [me, setMe] = useState<{
     playerId: string;
     displayName: string;
@@ -55,6 +56,7 @@ export default function RoomLobbyPage() {
         solved?: unknown;
         revealed?: unknown;
         answers?: unknown;
+        pending?: unknown;
         rejected?: unknown;
       };
       const rejected: { clueId: string; submissionId: string }[] = Array.isArray(
@@ -92,6 +94,9 @@ export default function RoomLobbyPage() {
                 ),
               )
             : {},
+        pending: Array.isArray(body.pending)
+          ? body.pending.filter((value): value is string => typeof value === "string")
+          : [],
         rejected,
       });
     } catch {
@@ -329,6 +334,7 @@ export default function RoomLobbyPage() {
                 initialSolvedClues={solvedCluesMap}
                 initialAnswers={playerProgress.answers}
                 playerSolvedClues={playerProgress.solved}
+                playerPendingClues={playerProgress.pending}
                 playerRejected={playerProgress.rejected}
                 selectionRequest={clueSelection}
                 onActiveClueChange={setActiveClueId}

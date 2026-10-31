@@ -81,6 +81,7 @@ interface CrosswordGridProps {
   initialSolvedClues?: Record<string, string>;
   initialAnswers?: Record<string, string>;
   playerSolvedClues?: string[];
+  playerPendingClues?: string[];
   playerRejected?: { clueId: string; submissionId: string }[];
   selectionRequest?: ClueSelectionRequest | null;
   onActiveClueChange?: (clueId: string | null) => void;
@@ -97,6 +98,7 @@ export default function CrosswordGrid({
   initialSolvedClues = EMPTY_SOLVED_CLUES,
   initialAnswers,
   playerSolvedClues,
+  playerPendingClues,
   playerRejected,
   selectionRequest,
   onActiveClueChange,
@@ -189,6 +191,11 @@ export default function CrosswordGrid({
   const isRevealed = activeClueId ? revealedClues[activeClueId] ?? false : false;
   const ownSolvedClueIds = new Set(playerSolvedClues ?? []);
   const isOwnSolved = activeClueId ? ownSolvedClueIds.has(activeClueId) : false;
+  const pendingClueIds = useMemo(
+    () => new Set(playerPendingClues ?? []),
+    [playerPendingClues],
+  );
+  const isPending = activeClueId ? pendingClueIds.has(activeClueId) : false;
   const activeRejection = activeClueId
     ? (playerRejected ?? []).find((entry) => entry.clueId === activeClueId) ?? null
     : null;
@@ -756,7 +763,7 @@ export default function CrosswordGrid({
                   Admin rejected your answer for this clue. Try again.
                 </span>
               ) : null}
-              {feedback === "pending" && !showRejection ? (
+              {(feedback === "pending" || isPending) && !showRejection ? (
                 <span role="status" className="text-sm font-medium text-yellow-700">
                   Waiting for Admin
                 </span>
