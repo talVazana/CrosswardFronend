@@ -50,123 +50,139 @@ def get_grid_roi(gray):
             return gray[y:y+h, x:x+w], (x, y, w, h)
     return gray, (0, 0, gray.shape[1], gray.shape[0])
 
-def is_digit_component(stat, roi_shape):
-    """Component filter to distinguish valid digits from grid line residuals."""
-    area = stat[cv2.CC_STAT_AREA]
-    w = stat[cv2.CC_STAT_WIDTH]
-    h = stat[cv2.CC_STAT_HEIGHT]
-    left = stat[cv2.CC_STAT_LEFT]
-    roi_h, roi_w = roi_shape
-    
-    if w <= 2 or h <= 4:
-        return False
-    if w >= int(roi_w * 0.85) or h >= int(roi_h * 0.85):
-        return False
-    if left + w >= roi_w and (w <= 3 or h >= int(roi_h * 0.65)):
-        return False
-    if 15 <= area <= 400 and 3 <= w <= 25 and 6 <= h <= 25:
-        return True
-    return False
+WORKING_GRID_SIZE = 1100
+
+
+def _resize_for_analysis(image, target=WORKING_GRID_SIZE):
+    height, width = image.shape[:2]
+    longest = max(height, width)
+    if longest <= 0 or longest == target:
+        return image
+    scale = target / float(longest)
+    new_width = max(1, int(round(width * scale)))
+    new_height = max(1, int(round(height * scale)))
+    interpolation = cv2.INTER_AREA if scale < 1 else cv2.INTER_CUBIC
+    return cv2.resize(
+        image,
+        (new_width, new_height),
+        interpolation=interpolation,
+    )
+
+
+def _axis_boundaries(profile, cells):
+    length = len(profile)
+    if length == 0:
+        return np.array([], dtype=int)
+    distance = max(1, int(length / float(cells) * 0.7))
+    peaks, _ = find_peaks(-profile, distance=distance, prominence=3)
+    peaks = np.asarray(peaks, dtype=int)
+    margin = max(40, int(length * 0.04))
+
+    if peaks.size == 0:
+        return np.linspace(0, length - 1, cells + 1).astype(int)
+
+    if peaks[0] > margin:
+        peaks = np.insert(peaks, 0, int(np.argmin(profile[:margin])))
+    if peaks[-1] < length - margin:
+        tail = profile[-margin:][::-1]
+        peaks = np.append(peaks, length - 1 - int(np.argmin(tail)))
+
+    if len(peaks) != cells + 1:
+        return np.linspace(0, length - 1, cells + 1).astype(int)
+    return peaks
+
 
 def parse_crossword_image(image_path):
     img = cv2.imread(image_path)
     if img is None:
         raise FileNotFoundError(f"Cannot load image: {image_path}")
-    gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
-    
-    grid_crop, (gx, gy, gw, gh) = get_grid_roi(gray)
+    gray = _resize_for_analysis(cv2.cvtColor(img, cv2.COLOR_BGR2GRAY))
+
+    grid_crop, (_gx, _gy, _gw, _gh) = get_grid_roi(gray)
+    grid_h, grid_w = grid_crop.shape[:2]
+
     h_prof = np.mean(grid_crop, axis=1)
     v_prof = np.mean(grid_crop, axis=0)
-    
-    p13_h, _ = find_peaks(-h_prof, distance=int(gh / 13.0 * 0.7), prominence=3)
-    p13_v, _ = find_peaks(-v_prof, distance=int(gw / 13.0 * 0.7), prominence=3)
-    
+
+    p13_h, _ = find_peaks(-h_prof, distance=max(1, int(grid_h / 13.0 * 0.7)), prominence=3)
+    p13_v, _ = find_peaks(-v_prof, distance=max(1, int(grid_w / 13.0 * 0.7)), prominence=3)
+
     if len(p13_h) >= 13 and len(p13_v) >= 13:
         nr, nc = 13, 13
     else:
         nr, nc = 11, 11
-        
-    peaks_h, _ = find_peaks(-h_prof, distance=int(gh / float(nr) * 0.7), prominence=3)
-    peaks_v, _ = find_peaks(-v_prof, distance=int(gw / float(nc) * 0.7), prominence=3)
-    
-    if peaks_h[0] > 40:
-        peaks_h = np.insert(peaks_h, 0, np.argmin(h_prof[:40]))
-    if peaks_h[-1] < len(h_prof) - 40:
-        peaks_h = np.append(peaks_h, len(h_prof) - 1 - np.argmin(h_prof[-40:][::-1]))
-        
-    if peaks_v[0] > 40:
-        peaks_v = np.insert(peaks_v, 0, np.argmin(v_prof[:40]))
-    if peaks_v[-1] < len(v_prof) - 40:
-        peaks_v = np.append(peaks_v, len(v_prof) - 1 - np.argmin(v_prof[-40:][::-1]))
-        
+
+    peaks_h = _axis_boundaries(h_prof, nr)
+    peaks_v = _axis_boundaries(v_prof, nc)
+
     dark_thresh = auto_threshold_dark(grid_crop, nr, nc)
-    
+
     mat = []
     for r in range(nr):
         row = []
         for c in range(nc):
-            y1, y2 = peaks_h[r], peaks_h[r+1]
-            x1, x2 = peaks_v[c], peaks_v[c+1]
-            
+            y1, y2 = peaks_h[r], peaks_h[r + 1]
+            x1, x2 = peaks_v[c], peaks_v[c + 1]
+
             m_y = max(3, int((y2 - y1) * 0.08))
             m_x = max(3, int((x2 - x1) * 0.08))
-            cell = grid_crop[y1+m_y : y2-m_y, x1+m_x : x2-m_x]
-            
-            if np.mean(cell) < dark_thresh:
-                row.append(0)
-                continue
-                
-            cell_h_inner, cell_w_inner = cell.shape
-            num_roi = cell[0 : int(cell_h_inner * 0.6), int(cell_w_inner * 0.25) : cell_w_inner]
-            
-            _, bin_roi = cv2.threshold(num_roi, 160, 255, cv2.THRESH_BINARY_INV)
-            n_lbls, _, c_stats, _ = cv2.connectedComponentsWithStats(bin_roi)
-            
-            has_digit = any(is_digit_component(s, num_roi.shape) for s in c_stats[1:])
-            row.append(2 if has_digit else 1)
+            cell = grid_crop[y1 + m_y : y2 - m_y, x1 + m_x : x2 - m_x]
+
+            row.append(0 if np.mean(cell) < dark_thresh else 1)
         mat.append(row)
-        
+
     return mat, nr, nc
+
 
 def generate_crossword_json(mat, nr, nc):
     """Process matrix with right-to-left, top-to-bottom scanning for sequential numbering."""
     clues = []
+    numbered_matrix = [
+        [0 if mat[r][c] == 0 else 1 for c in range(nc)]
+        for r in range(nr)
+    ]
     clue_counter = 1
-    
+
     # Iterate row by row (top to bottom), but column by column from right (nc - 1) to left (0)
     for r in range(nr):
         for c in range(nc - 1, -1, -1):
-            if mat[r][c] == 2:
-                current_clue_number = clue_counter
-                clue_counter += 1
-                
-                is_horizontal = False
-                is_vertical = False
-                
-                # Hebrew horizontal logic: Word goes Right-to-Left
-                right_is_blocked = (c == nc - 1) or (mat[r][c + 1] == 0)
-                left_is_open = (c > 0) and (mat[r][c - 1] in [1, 2])
-                if right_is_blocked and left_is_open:
-                    is_horizontal = True
-                    
-                # Vertical logic: Word goes Top-to-Bottom
-                top_is_blocked = (r == 0) or (mat[r - 1][c] == 0)
-                bottom_is_open = (r < nr - 1) and (mat[r + 1][c] in [1, 2])
-                if top_is_blocked and bottom_is_open:
-                    is_vertical = True
-                    
-                clues.append({
-                    "clue_number": current_clue_number,
-                    "row": r,
-                    "col": c,
-                    "horizontal": is_horizontal,
-                    "vertical": is_vertical
-                })
-                
+            if mat[r][c] == 0:
+                continue
+
+            current_clue_number = clue_counter
+
+            is_horizontal = False
+            is_vertical = False
+
+            # Hebrew horizontal logic: Word goes Right-to-Left
+            right_is_blocked = (c == nc - 1) or (mat[r][c + 1] == 0)
+            left_is_open = (c > 0) and (mat[r][c - 1] != 0)
+            if right_is_blocked and left_is_open:
+                is_horizontal = True
+
+            # Vertical logic: Word goes Top-to-Bottom
+            top_is_blocked = (r == 0) or (mat[r - 1][c] == 0)
+            bottom_is_open = (r < nr - 1) and (mat[r + 1][c] != 0)
+            if top_is_blocked and bottom_is_open:
+                is_vertical = True
+
+            if not (is_horizontal or is_vertical):
+                continue
+
+            numbered_matrix[r][c] = 2
+            clues.append({
+                "clue_number": current_clue_number,
+                "row": r,
+                "col": c,
+                "horizontal": is_horizontal,
+                "vertical": is_vertical
+            })
+            clue_counter += 1
+
     return {
         "rows": nr,
         "cols": nc,
-        "matrix": mat,
+        "matrix": numbered_matrix,
         "clues": clues
     }
 

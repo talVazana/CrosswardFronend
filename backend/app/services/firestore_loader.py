@@ -29,6 +29,7 @@ from . import firestore_publisher
 from . import gemini_quota
 from . import limits as limits_module
 from . import profiles as profiles_module
+from .puzzle_numbering import repair_puzzle_numbering
 from .. import special_users
 
 
@@ -61,7 +62,7 @@ def _restore_rooms() -> None:
             continue
 
         try:
-            puzzle = Puzzle(**puzzle_data)
+            puzzle = repair_puzzle_numbering(Puzzle(**puzzle_data))
             status = RoomStatus(document.get("status", RoomStatus.lobby.value))
         except Exception:
             continue
