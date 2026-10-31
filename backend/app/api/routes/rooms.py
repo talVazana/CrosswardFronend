@@ -17,6 +17,7 @@ from ...repositories.interfaces import (
     RoomRepository,
 )
 from ...services import auth, firestore_publisher, profiles, scoring_service
+from ...services import cookies as cookie_settings
 from ...services.room_service import RoomService
 
 router = APIRouter()
@@ -198,8 +199,8 @@ def join_room(roomId: str, body: JoinRequest, response: Response, request: Reque
             key=SESSION_COOKIE_NAME,
             value=_cookie_value(session_token, roomId, token),
             httponly=True,
-            secure=False,
-            samesite="lax",
+            secure=cookie_settings.secure(),
+            samesite=cookie_settings.samesite(),
         )
     if changed or reclaimed is None:
         firestore_publisher.publish_room(roomId)

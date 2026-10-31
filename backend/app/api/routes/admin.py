@@ -10,6 +10,7 @@ from ...models.room import Player, Room, RoomStatus
 from ...repositories.in_memory import InMemoryAnswerRepository
 from ...repositories.interfaces import AnswerRepository
 from ...services import auth, firestore_publisher, telegram_notifier
+from ...services import cookies as cookie_settings
 from ...services import scoring_service
 from ...services.puzzle_image_processor import PuzzleProcessingError, process_image
 from ...services.puzzle_utils import normalize_answer
@@ -75,8 +76,8 @@ def create_admin_session(request: Request, response: Response):
         key=ADMIN_SESSION_COOKIE_NAME,
         value=token,
         httponly=True,
-        secure=False,
-        samesite="lax",
+        secure=cookie_settings.secure(),
+        samesite=cookie_settings.samesite(),
     )
     return {"roomId": None, "playerId": "admin", "displayName": email}
 
