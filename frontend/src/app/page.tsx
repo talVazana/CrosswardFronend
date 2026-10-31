@@ -2,7 +2,6 @@
 
 import { FormEvent, useEffect, useState } from "react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
 import EmptyState from "@/components/ui/EmptyState";
 import ErrorMessage from "@/components/ui/ErrorMessage";
 import LoadingSpinner from "@/components/ui/LoadingSpinner";
@@ -268,11 +267,9 @@ type PlayerTotal = {
 };
 
 export default function Page() {
-  const router = useRouter();
   const [backendStatus, setBackendStatus] = useState<
     "checking" | "connected" | "offline"
   >("checking");
-  const [roomId, setRoomId] = useState("Room1");
   const [rooms, setRooms] = useState<RoomSummary[]>([]);
   const [roomsLoading, setRoomsLoading] = useState(true);
   const [roomsError, setRoomsError] = useState<string | null>(null);
@@ -396,12 +393,6 @@ export default function Page() {
     return unsubscribe;
   }, []);
 
-  const submit = (e: FormEvent<HTMLFormElement>) => {
-    e.preventDefault();
-    const id = roomId.trim();
-    if (id) router.push(`/rooms/${id}/join`);
-  };
-
   const saveNickname = async (e: FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     const value = nicknameDraft.trim();
@@ -508,32 +499,8 @@ export default function Page() {
         </section>
       ) : null}
 
-      <section className="glass grid gap-6 px-6 py-8 md:grid-cols-[1.5fr_1fr]">
-        <div className="flex flex-col gap-4">
-          <div className="flex flex-col gap-2">
-            <h2 className="text-2xl font-semibold text-blue-900">Jump into a room</h2>
-            <p className="muted text-sm">
-              Enter a room ID or pick one from the gallery below. Solve clues
-              together, earn points, and watch the board update live.
-            </p>
-          </div>
-          <form onSubmit={submit} className="flex flex-col gap-3 sm:flex-row">
-            <label className="flex flex-1 flex-col gap-1 text-start">
-              <span className="text-sm font-medium">Room ID</span>
-              <input
-                type="text"
-                value={roomId}
-                onChange={(e) => setRoomId(e.target.value)}
-                className="input"
-                placeholder="Room1"
-              />
-            </label>
-            <button type="submit" className="btn-primary sm:self-end">
-              Join Room
-            </button>
-          </form>
-        </div>
-        <div className="glass-soft flex flex-col justify-center gap-2 p-5">
+      <section className="glass px-6 py-8">
+        <div className="glass-soft mx-auto flex max-w-xl flex-col justify-center gap-2 p-5">
           <p className="text-sm font-medium text-blue-800">Rooms right now</p>
           <p className="text-4xl font-bold text-blue-900">{activeRooms}</p>
           <p className="muted text-sm">

@@ -144,6 +144,18 @@ describe("landing page room gallery", () => {
     expect(headings[1].textContent).toBe("Alpha");
   });
 
+  it("does not render a jump-to-room form", async () => {
+    stubHealth();
+    render(<Page />);
+    emitRooms(rooms);
+
+    await screen.findByText("Alpha");
+    expect(screen.queryByText("Jump into a room")).toBeNull();
+    expect(screen.queryByRole("textbox", { name: "Room ID" })).toBeNull();
+    expect(screen.queryByRole("button", { name: "Join Room" })).toBeNull();
+    expect(screen.getByText("Rooms right now")).toBeTruthy();
+  });
+
   it("shows lifetime scores from every room on the main screen", async () => {
     stubHealth([
       { displayName: "Amit", totalScore: 12, color: "#0D9488" },
