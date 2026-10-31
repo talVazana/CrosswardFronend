@@ -73,6 +73,9 @@ class InMemoryPlayerTotalRepository(PlayerTotalRepository):
     def save(self, name_key: str, total: PlayerTotal) -> None:
         self._totals[name_key] = total
 
+    def delete(self, name_key: str) -> None:
+        self._totals.pop(name_key, None)
+
     def list_all(self) -> list[PlayerTotal]:
         return list(self._totals.values())
 

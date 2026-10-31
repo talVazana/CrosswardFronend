@@ -399,6 +399,8 @@ export default function RoomLobbyPage() {
                     src={`${process.env.NEXT_PUBLIC_BACKEND_URL ?? "http://localhost:8000"}/rooms/${roomId}/image`}
                     alt="Original published crossword page for this room"
                     className="mx-auto h-auto w-full rounded-lg"
+                    loading="lazy"
+                    decoding="async"
                   />
                 </div>
               </div>

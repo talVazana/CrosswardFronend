@@ -1,3 +1,4 @@
+import logging
 import secrets
 from types import SimpleNamespace
 
@@ -11,6 +12,8 @@ from ...repositories.in_memory import InMemoryAnswerRepository
 from ...repositories.interfaces import AnswerRepository
 from ...services import auth, cookies, firestore_publisher, telegram_notifier
 from ...services import scoring_service
+from ...services.image_optimizer import ImageOptimizationError, optimize_for_display
+from ...services.limits import get_limits
 from ...services.puzzle_image_processor import PuzzleProcessingError, process_image
 from ...services.puzzle_utils import normalize_answer
 from ...services.reconciliation_service import reconcile_pending_submissions
@@ -18,6 +21,8 @@ from . import events as events_module
 from . import rooms as rooms_module
 
 router = APIRouter()
+
+logger = logging.getLogger(__name__)
 
 ADMIN_SESSION_COOKIE_NAME = "Admin-Session-Token"
 
@@ -142,6 +147,19 @@ async def create_room(request: Request):
     except PuzzleProcessingError as exc:
         raise HTTPException(status_code=400, detail=str(exc))
 
+    try:
+        display_bytes = optimize_for_display(image_bytes)
+    except ImageOptimizationError as exc:
+        logger.warning("Image optimization failed; storing original bytes: %s", exc)
+        display_bytes = image_bytes
+
+    limits = get_limits()
+    existing_rooms = rooms_module.room_repository.list_all()
+    while len(existing_rooms) >= limits.max_rooms:
+        oldest = min(existing_rooms, key=lambda room: room.createdAt)
+        _remove_room_fully(oldest.roomId)
+        existing_rooms = rooms_module.room_repository.list_all()
+
     from . import admin_puzzles as admin_puzzles_module
 
     room_id = f"room-{secrets.token_hex(4)}"
@@ -174,7 +192,7 @@ async def create_room(request: Request):
     )
     rooms_module.room_repository.create(room)
 
-    firestore_publisher.publish_room_image(room_id, image_bytes)
+    firestore_publisher.publish_room_image(room_id, display_bytes, "image/jpeg")
     firestore_publisher.publish_room(room_id)
 
     return {"roomId": room_id, "puzzleId": puzzle_id, "status": room.status.value}
@@ -186,34 +204,33 @@ def admin_me(request: Request):
     return {"isAdmin": True}
 
 
-@router.delete("/admin/rooms/{roomId}")
-def delete_room(roomId: str, request: Request):
-    _resolve_admin(request)
-
-    room = rooms_module.room_repository.get(roomId)
+def _remove_room_fully(room_id: str) -> None:
+    """Remove one room and all associated state, then refresh lifetime totals."""
+    room = rooms_module.room_repository.get(room_id)
     puzzle_id = room.puzzleSnapshot.puzzleId if room is not None else None
-    removed_tokens = [k for k, v in rooms_module._sessions.items() if v[0] == roomId]
+
+    removed_tokens = [k for k, v in rooms_module._sessions.items() if v[0] == room_id]
     for token in removed_tokens:
         firestore_publisher.delete_session(token)
 
-    rooms_module.room_repository._rooms.pop(roomId, None)
+    rooms_module.room_repository._rooms.pop(room_id, None)
     rooms_module.player_repository._players = {
         k: v
         for k, v in rooms_module.player_repository._players.items()
-        if k[0] != roomId
+        if k[0] != room_id
     }
     scoring_service._default_service._score_repository._events = {
         k: v
         for k, v in scoring_service._default_service._score_repository._events.items()
-        if v.roomId != roomId
+        if v.roomId != room_id
     }
     scoring_service._default_service._public_clue_states = {
         k: v
         for k, v in scoring_service._default_service._public_clue_states.items()
-        if k[0] != roomId
+        if k[0] != room_id
     }
     rooms_module._sessions = {
-        k: v for k, v in rooms_module._sessions.items() if v[0] != roomId
+        k: v for k, v in rooms_module._sessions.items() if v[0] != room_id
     }
 
     from . import drafts as drafts_module
@@ -222,23 +239,30 @@ def delete_room(roomId: str, request: Request):
     submissions_module.submission_repository._submissions = {
         k: v
         for k, v in submissions_module.submission_repository._submissions.items()
-        if v.roomId != roomId
+        if v.roomId != room_id
     }
-    from ...services import admin_solves
+    from ...services import admin_solves, player_totals
 
-    admin_solves.remove_room(roomId)
+    admin_solves.remove_room(room_id)
     removed_states = [
-        key for key in drafts_module.player_clue_state_repository.states if key[0] == roomId
+        key for key in drafts_module.player_clue_state_repository.states if key[0] == room_id
     ]
     for _, player_id, clue_id in removed_states:
-        firestore_publisher.delete_player_state(roomId, player_id, clue_id)
+        firestore_publisher.delete_player_state(room_id, player_id, clue_id)
     drafts_module.player_clue_state_repository.states = {
         k: v
         for k, v in drafts_module.player_clue_state_repository.states.items()
-        if k[0] != roomId
+        if k[0] != room_id
     }
-    firestore_publisher.delete_room_docs(roomId, puzzle_id)
+    firestore_publisher.delete_room_docs(room_id, puzzle_id)
 
+    player_totals.rebuild()
+
+
+@router.delete("/admin/rooms/{roomId}")
+def delete_room(roomId: str, request: Request):
+    _resolve_admin(request)
+    _remove_room_fully(roomId)
     return {"status": "ok"}
 
 

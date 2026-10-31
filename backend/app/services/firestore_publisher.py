@@ -17,12 +17,15 @@ from __future__ import annotations
 
 import base64
 import json
+import logging
 import os
 import threading
 import time
 import urllib.error
 import urllib.parse
 import urllib.request
+
+logger = logging.getLogger(__name__)
 
 FIRESTORE_EMULATOR_HOST = os.environ.get("FIRESTORE_EMULATOR_HOST", "127.0.0.1:8080")
 FIRESTORE_PROJECT_ID = os.environ.get("FIRESTORE_PROJECT_ID", "demo-crossword-arena")
@@ -85,7 +88,9 @@ def _firestore_value(value: object) -> dict:
     raise TypeError(f"Unsupported Firestore value type: {type(value)!r}")
 
 
-def _write_document(collection: str, document_id: str, data: dict) -> None:
+def _write_document(
+    collection: str, document_id: str, data: dict, timeout: float = 3
+) -> bool:
     fields = {str(key): _firestore_value(value) for key, value in data.items()}
     body = json.dumps({"fields": fields}).encode("utf-8")
 
@@ -104,10 +109,12 @@ def _write_document(collection: str, document_id: str, data: dict) -> None:
         },
     )
     try:
-        urllib.request.urlopen(request, timeout=3)
+        urllib.request.urlopen(request, timeout=timeout)
+        return True
     except (urllib.error.URLError, OSError, TimeoutError):
         # Emulator unavailable. Ignore; the next mutation will republish.
-        pass
+        logger.warning("Firestore write failed for %s/%s", collection, document_id)
+        return False
 
 
 def build_room_payload(room_id: str) -> dict | None:
@@ -213,6 +220,7 @@ def publish_room_image(
         "room_images",
         room_id,
         {"data": image_bytes, "contentType": content_type},
+        timeout=10,
     )
 
 
@@ -281,6 +289,13 @@ def publish_player_total(name_key: str, total) -> None:
             "updatedAt": total.updatedAt.isoformat(),
         },
     )
+
+
+def delete_player_total(name_key: str) -> None:
+    """Remove a stale lifetime score document after a room is deleted."""
+    if not _publishing_enabled():
+        return
+    _delete_document("player_totals", urllib.parse.quote(name_key, safe=""))
 
 
 def publish_admin_solve(solve) -> None:

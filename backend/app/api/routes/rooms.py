@@ -1,8 +1,9 @@
+import hashlib
 import secrets
 import threading
 from collections import Counter
 
-from fastapi import APIRouter, Cookie, HTTPException, Request, Response
+from fastapi import APIRouter, Cookie, Header, HTTPException, Request, Response
 from pydantic import BaseModel, Field
 
 from ...models.room import ASSIGNED_PLAYER_COLORS, Player, PlayerIdentity
@@ -272,9 +273,25 @@ def get_room_player(
 
 
 @router.get("/rooms/{roomId}/image")
-def get_room_image(roomId: str):
+def get_room_image(
+    roomId: str,
+    if_none_match: str | None = Header(default=None, alias="If-None-Match"),
+):
     result = firestore_publisher.get_room_image(roomId)
     if result is None:
         raise HTTPException(status_code=404, detail="Image not found")
     data, content_type = result
-    return Response(content=data, media_type=content_type)
+
+    etag = f'"{hashlib.sha1(data).hexdigest()}"'
+    if if_none_match == etag:
+        return Response(status_code=304)
+
+    return Response(
+        content=data,
+        media_type=content_type,
+        headers={
+            "Cache-Control": "public, max-age=31536000, immutable",
+            "Content-Length": str(len(data)),
+            "ETag": etag,
+        },
+    )

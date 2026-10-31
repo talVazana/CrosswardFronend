@@ -52,6 +52,9 @@ class PlayerTotalRepository(ABC):
     def save(self, name_key: str, total: PlayerTotal) -> None: ...
 
     @abstractmethod
+    def delete(self, name_key: str) -> None: ...
+
+    @abstractmethod
     def list_all(self) -> list[PlayerTotal]: ...
 
 

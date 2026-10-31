@@ -130,6 +130,46 @@ LIMIT_SPECS: tuple[LimitSpec, ...] = (
         "pixels",
     ),
     LimitSpec(
+        "max_stored_image_dimension",
+        "MAX_STORED_IMAGE_DIMENSION",
+        "Stored image dimension",
+        "int",
+        2000,
+        500,
+        6000,
+        "pixels",
+    ),
+    LimitSpec(
+        "stored_image_quality",
+        "STORED_IMAGE_QUALITY",
+        "Stored image quality",
+        "int",
+        82,
+        40,
+        95,
+        "",
+    ),
+    LimitSpec(
+        "max_stored_image_bytes",
+        "MAX_STORED_IMAGE_BYTES",
+        "Stored image max bytes",
+        "int",
+        700000,
+        100000,
+        5242880,
+        "bytes",
+    ),
+    LimitSpec(
+        "max_rooms",
+        "MAX_ROOMS",
+        "Maximum rooms",
+        "int",
+        20,
+        1,
+        200,
+        "rooms",
+    ),
+    LimitSpec(
         "gemini_max_per_hour",
         "GEMINI_MAX_PER_HOUR",
         "Extractions per hour",
@@ -221,6 +261,10 @@ class Limits:
     max_total_clue_chars: int
     max_upload_bytes: int
     max_image_dimension: int
+    max_stored_image_dimension: int
+    stored_image_quality: int
+    max_stored_image_bytes: int
+    max_rooms: int
     gemini_max_per_hour: int
     gemini_max_per_day: int
     image_parser_enabled: bool
