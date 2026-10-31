@@ -3,7 +3,9 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { useParams } from "next/navigation";
-import CrosswordGrid from "@/components/CrosswordGrid";
+import CrosswordGrid, {
+  type ClueSelectionRequest,
+} from "@/components/CrosswordGrid";
 import ClueList from "@/components/ClueList";
 import Scoreboard from "@/components/Scoreboard";
 import LoadingSpinner from "@/components/ui/LoadingSpinner";
@@ -29,6 +31,10 @@ export default function RoomLobbyPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [showOriginal, setShowOriginal] = useState(false);
+  const [clueSelection, setClueSelection] =
+    useState<ClueSelectionRequest | null>(null);
+  const [activeClueId, setActiveClueId] = useState<string | null>(null);
+  const [needsJoin, setNeedsJoin] = useState(false);
   const [playerProgress, setPlayerProgress] = useState<{
     solved: string[];
     revealed: string[];
@@ -134,6 +140,12 @@ export default function RoomLobbyPage() {
     const loadMe = async () => {
       try {
         const res = await roomFetch(roomId, `/rooms/${roomId}/me`);
+        if (cancelled) return;
+        if (res.status === 401) {
+          setMe(null);
+          setNeedsJoin(true);
+          return;
+        }
         if (!res.ok) return;
         const body = (await res.json()) as {
           playerId?: unknown;
@@ -151,6 +163,7 @@ export default function RoomLobbyPage() {
             displayName: body.displayName,
             color: body.color,
           });
+          setNeedsJoin(false);
         }
       } catch {
         // Visitors without a player session have no identity to show.
@@ -190,6 +203,13 @@ export default function RoomLobbyPage() {
         ? prev
         : { ...prev, revealed: [...prev.revealed, clueId] },
     );
+  }, []);
+
+  const handleSelectClue = useCallback((clue: { clueId: string }) => {
+    setClueSelection((prev) => ({
+      clueId: clue.clueId,
+      nonce: (prev?.nonce ?? 0) + 1,
+    }));
   }, []);
 
   const puzzle = room?.puzzle;
@@ -276,6 +296,18 @@ export default function RoomLobbyPage() {
               Home
             </Link>
           </header>
+          {needsJoin ? (
+            <section className="glass-soft flex flex-wrap items-center gap-2 px-4 py-3 text-sm text-blue-900">
+              <span>You are viewing as a guest.</span>
+              <Link
+                href={`/rooms/${roomId}/join`}
+                className="btn-ghost text-sm"
+              >
+                Join the room
+              </Link>
+              <span>to submit answers.</span>
+            </section>
+          ) : null}
           <section className="glass flex flex-col gap-2 px-6 py-4">
             <div className="flex flex-wrap items-center justify-between gap-2">
               <h2 className="text-lg font-semibold text-blue-800">Puzzle</h2>
@@ -298,6 +330,9 @@ export default function RoomLobbyPage() {
                 initialAnswers={playerProgress.answers}
                 playerSolvedClues={playerProgress.solved}
                 playerRejected={playerProgress.rejected}
+                selectionRequest={clueSelection}
+                onActiveClueChange={setActiveClueId}
+                onUnauthorized={() => setNeedsJoin(true)}
                 onClueSolved={handleClueSolved}
                 onClueRevealed={handleClueRevealed}
               />
@@ -313,8 +348,10 @@ export default function RoomLobbyPage() {
               <h2 className="text-lg font-semibold text-blue-800">Clues</h2>
               <ClueList
                 clues={displayClues ?? puzzle.clues}
+                activeClueId={activeClueId}
                 playerSolvedClueIds={playerSolvedClueIds}
                 playerRevealedClueIds={playerRevealedClueIds}
+                onSelectClue={handleSelectClue}
               />
             </section>
           ) : null}

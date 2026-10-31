@@ -1,6 +1,7 @@
 "use client";
 
 import {
+  ChangeEvent,
   CSSProperties,
   KeyboardEvent,
   useCallback,
@@ -67,6 +68,11 @@ function loadSeenRejections(roomId: string): string[] {
   }
 }
 
+export interface ClueSelectionRequest {
+  clueId: string;
+  nonce: number;
+}
+
 interface CrosswordGridProps {
   roomId: string;
   puzzle: Puzzle;
@@ -76,6 +82,9 @@ interface CrosswordGridProps {
   initialAnswers?: Record<string, string>;
   playerSolvedClues?: string[];
   playerRejected?: { clueId: string; submissionId: string }[];
+  selectionRequest?: ClueSelectionRequest | null;
+  onActiveClueChange?: (clueId: string | null) => void;
+  onUnauthorized?: () => void;
   onClueSolved?: (clueId: string) => void;
   onClueRevealed?: (clueId: string) => void;
 }
@@ -89,6 +98,9 @@ export default function CrosswordGrid({
   initialAnswers,
   playerSolvedClues,
   playerRejected,
+  selectionRequest,
+  onActiveClueChange,
+  onUnauthorized,
   onClueSolved,
   onClueRevealed,
 }: CrosswordGridProps) {
@@ -109,6 +121,8 @@ export default function CrosswordGrid({
   const [nextWriteIndex, setNextWriteIndex] = useState(0);
   const shakeTimeout = useRef<ReturnType<typeof setTimeout> | null>(null);
   const lastProcessedEventRef = useRef<LiveRoomEvent | null>(null);
+  const inputRef = useRef<HTMLInputElement | null>(null);
+  const lastSelectionNonce = useRef<number | null>(null);
 
   const isPaused = roomStatus === "paused";
 
@@ -142,6 +156,30 @@ export default function CrosswordGrid({
   const activeClueId = activeClue?.clueId ?? null;
   const activeCells = activeClue ? cellsForClue(grid, activeClue) : [];
   const activeCellKeys = new Set(activeCells.map((cell) => cellKey(cell.row, cell.col)));
+
+  useEffect(() => {
+    onActiveClueChange?.(activeClueId);
+  }, [activeClueId, onActiveClueChange]);
+
+  useEffect(() => {
+    if (!selectionRequest || selectionRequest.nonce === lastSelectionNonce.current) {
+      return;
+    }
+    lastSelectionNonce.current = selectionRequest.nonce;
+    const clue = puzzle.clues.find(
+      (entry) => entry.clueId === selectionRequest.clueId,
+    );
+    if (!clue) return;
+    const cells = cellsForClue(grid, clue);
+    if (cells.length === 0) return;
+    setDirection(clue.direction);
+    const first = cells[0];
+    handleCellClick(first.row, first.col, first, false);
+    setNextWriteIndex(0);
+    setFeedback(null);
+    setError(null);
+    inputRef.current?.focus({ preventScroll: true });
+  }, [selectionRequest, grid, puzzle.clues, handleCellClick, setDirection]);
   const selectedIndex = selectedCell
     ? activeCells.findIndex(
         (cell) => cell.row === selectedCell.row && cell.col === selectedCell.col,
@@ -279,6 +317,7 @@ export default function CrosswordGrid({
     setFeedback(null);
     setError(null);
     handleCellClick(row, col, cell);
+    inputRef.current?.focus({ preventScroll: true });
   };
 
   const writeLetter = (letter: string) => {
@@ -348,7 +387,7 @@ export default function CrosswordGrid({
     handleCellClick(row, col, cell);
   };
 
-  const handleKeyDown = (e: KeyboardEvent<HTMLDivElement>) => {
+  const handleKeyDown = (e: KeyboardEvent<HTMLElement>) => {
     if (isPaused || !selectedCell) return;
 
     if (e.key === "Enter") {
@@ -387,6 +426,13 @@ export default function CrosswordGrid({
     }
   };
 
+  const handleInputChange = (event: ChangeEvent<HTMLInputElement>) => {
+    const value = event.currentTarget.value;
+    event.currentTarget.value = "";
+    const letter = value.slice(-1);
+    if (letter && letter !== " ") writeLetter(letter.toUpperCase());
+  };
+
   const submit = useCallback(async () => {
     if (!activeClueId || submitting || isRevealed || isPaused) return;
     if (!isComplete) return;
@@ -410,6 +456,11 @@ export default function CrosswordGrid({
           body: JSON.stringify({ answer }),
         },
       );
+      if (res.status === 401) {
+        setError("Your player session expired. Rejoin the room to submit.");
+        onUnauthorized?.();
+        return;
+      }
       if (!res.ok) {
         setError(`Submission failed (status ${res.status})`);
         return;
@@ -449,6 +500,7 @@ export default function CrosswordGrid({
     isRevealed,
     isPaused,
     onClueSolved,
+    onUnauthorized,
   ]);
 
   const reveal = useCallback(async () => {
@@ -473,6 +525,11 @@ export default function CrosswordGrid({
       );
       if (res.status === 400) {
         setError("Answer not available yet");
+        return;
+      }
+      if (res.status === 401) {
+        setError("Your player session expired. Rejoin the room to reveal answers.");
+        onUnauthorized?.();
         return;
       }
       if (!res.ok) {
@@ -510,6 +567,7 @@ export default function CrosswordGrid({
     isOwnSolved,
     isPaused,
     onClueRevealed,
+    onUnauthorized,
   ]);
 
   const solvedColorsForCell = (cell: Cell): string[] => {
@@ -576,12 +634,27 @@ export default function CrosswordGrid({
 
   return (
     <div
-      className="flex flex-col gap-4 rounded-lg outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2"
+      className="relative flex flex-col gap-4 rounded-lg outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2"
       tabIndex={0}
       onKeyDown={handleKeyDown}
       role="application"
       aria-label="Crossword grid"
     >
+      <input
+        ref={inputRef}
+        data-testid="crossword-input"
+        aria-label="Crossword letter input"
+        className="absolute left-0 top-0 h-px w-px opacity-0"
+        inputMode="text"
+        autoCapitalize="characters"
+        autoCorrect="off"
+        spellCheck={false}
+        onChange={handleInputChange}
+        onKeyDown={(event) => {
+          event.stopPropagation();
+          handleKeyDown(event);
+        }}
+      />
       <div
         dir="ltr"
         className="mx-auto grid w-full max-w-xl gap-0"

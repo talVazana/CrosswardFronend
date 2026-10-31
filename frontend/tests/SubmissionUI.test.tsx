@@ -241,4 +241,45 @@ describe("TASK-025 submission UI", () => {
     expect(alert.textContent).toMatch(/failed/i);
     expect(screen.getByTestId("cell-0-2")).toBeTruthy();
   });
+
+  it("accepts letters from the hidden input for mobile keyboards", () => {
+    renderGrid();
+    const input = screen.getByTestId("crossword-input");
+    for (const letter of "cat") {
+      fireEvent.change(input, { target: { value: letter } });
+    }
+    expect(screen.getByTestId("cell-0-2").textContent).toContain("C");
+    expect(screen.getByTestId("cell-0-1").textContent).toContain("A");
+    expect(screen.getByTestId("cell-0-0").textContent).toContain("T");
+    expect(getSubmit().disabled).toBe(false);
+  });
+
+  it("activates a clue selected from the clue list", () => {
+    render(
+      <CrosswordGrid
+        roomId="room-1"
+        puzzle={puzzle}
+        selectionRequest={{ clueId: "A1", nonce: 1 }}
+      />,
+    );
+    expect(screen.getByText("1 Across")).toBeTruthy();
+  });
+
+  it("notifies when the player session is no longer valid", async () => {
+    const onUnauthorized = vi.fn();
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(response(401, {})));
+    render(
+      <CrosswordGrid
+        roomId="room-1"
+        puzzle={puzzle}
+        onUnauthorized={onUnauthorized}
+      />,
+    );
+    fireEvent.click(screen.getByTestId("cell-0-2"));
+    typeWord("cat");
+    fireEvent.click(getSubmit());
+    const alert = await screen.findByRole("alert");
+    expect(alert.textContent).toMatch(/session expired/i);
+    expect(onUnauthorized).toHaveBeenCalled();
+  });
 });
