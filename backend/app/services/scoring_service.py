@@ -43,10 +43,9 @@ class ScoringService:
         for event in events:
             if event.clueId == clue_id and event.playerId == player_id and event.points > 0:
                 return 0
-        for event in events:
-            if event.clueId == clue_id and event.points > 0:
-                return 1
-        return 2
+        # Every correct solve is worth 1 point. The first solver is tracked
+        # separately (firstSolverColor), not by extra points.
+        return 1
 
     def apply_score(
         self,
@@ -73,8 +72,9 @@ class ScoringService:
         if state is None:
             state = PublicClueState(clueId=clue_id)
             self._public_clue_states[key] = state
+        is_first = not state.solved
         state.solved = True
-        if points == 2:
+        if is_first:
             state.firstSolverColor = player_color
 
         return event

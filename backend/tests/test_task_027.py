@@ -145,37 +145,22 @@ def points_by_player(player_ids, responses):
     return result
 
 
-def first_solver_events(score_service):
-    events = score_service._score_repository.list_by_room(ROOM_ID)
-    return [event for event in events if event.points == 2]
-
-
-def test_two_different_players_concurrent_one_gets_two_other_gets_one(env):
+def test_two_different_players_concurrent_each_gets_one(env):
     client, players, score_service, _ = env
     player_ids = ["player-0", "player-1"]
 
     responses = fire_concurrently(client, player_ids, players)
     points = points_by_player(player_ids, responses)
 
-    assert sorted(points.values()) == [1, 2], (
-        f"expected one 2-point and one 1-point award, got {points}"
-    )
-    assert sum(points.values()) == 3
-
-    solver_events = first_solver_events(score_service)
-    assert len(solver_events) == 1, f"expected exactly 1 first solver, got {len(solver_events)}"
-    winner = next(pid for pid, value in points.items() if value == 2)
-    assert solver_events[0].playerId == winner
+    assert sorted(points.values()) == [1, 1]
+    assert sum(points.values()) == 2
 
     state = score_service.get_public_clue_state(ROOM_ID, CLUE_ID)
     assert state.solved is True
-    assert state.firstSolverColor == players[winner]["color"], (
-        f"expected firstSolverColor {players[winner]['color']!r} for winner "
-        f"{winner}, got {state.firstSolverColor!r}"
-    )
+    assert state.firstSolverColor in {players[pid]["color"] for pid in player_ids}
 
 
-def test_same_player_duplicate_concurrent_first_gets_two_second_gets_zero(env):
+def test_same_player_duplicate_concurrent_first_gets_one_second_gets_zero(env):
     client, players, score_service, _ = env
     player_ids = ["player-0", "player-0"]
 
@@ -186,39 +171,24 @@ def test_same_player_duplicate_concurrent_first_gets_two_second_gets_zero(env):
         assert response.status_code == 200, response.text
         assert response.json().get("status") == "correct", response.text
 
-    assert sorted(points) == [0, 2], (
-        f"expected one 2-point and one 0-point award for duplicate submissions, got {points}"
-    )
-    assert sum(points) == 2
+    assert sorted(points) == [0, 1]
+    assert sum(points) == 1
 
-    solver_events = first_solver_events(score_service)
-    assert len(solver_events) == 1, f"expected exactly 1 first solver, got {len(solver_events)}"
-    assert solver_events[0].playerId == "player-0"
+    state = score_service.get_public_clue_state(ROOM_ID, CLUE_ID)
+    assert state.solved is True
+    assert state.firstSolverColor == players["player-0"]["color"]
 
 
-def test_high_concurrency_ten_players_one_two_and_nine_ones(env):
+def test_high_concurrency_ten_players_each_gets_one(env):
     client, players, score_service, _ = env
     player_ids = [f"player-{index}" for index in range(PLAYER_COUNT)]
 
     responses = fire_concurrently(client, player_ids, players)
     points = points_by_player(player_ids, responses)
 
-    assert list(points.values()).count(2) == 1, (
-        f"expected exactly one 2-point award, got {points}"
-    )
-    assert list(points.values()).count(1) == PLAYER_COUNT - 1, (
-        f"expected {PLAYER_COUNT - 1} one-point awards, got {points}"
-    )
-    assert sum(points.values()) == 2 + (PLAYER_COUNT - 1) * 1
-
-    solver_events = first_solver_events(score_service)
-    assert len(solver_events) == 1, f"expected exactly 1 first solver, got {len(solver_events)}"
-    winner = next(pid for pid, value in points.items() if value == 2)
-    assert solver_events[0].playerId == winner
+    assert list(points.values()).count(1) == PLAYER_COUNT
+    assert sum(points.values()) == PLAYER_COUNT
 
     state = score_service.get_public_clue_state(ROOM_ID, CLUE_ID)
     assert state.solved is True
-    assert state.firstSolverColor == players[winner]["color"], (
-        f"expected firstSolverColor {players[winner]['color']!r} for winner "
-        f"{winner}, got {state.firstSolverColor!r}"
-    )
+    assert state.firstSolverColor in {players[pid]["color"] for pid in player_ids}

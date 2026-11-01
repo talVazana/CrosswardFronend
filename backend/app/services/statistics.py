@@ -1,9 +1,9 @@
 """Per-room statistics: admin-first solves vs player-first solves.
 
 These are informational tallies. They never change the real game scoring.
-A player counts 1 for each clue they solved first (points == 2 score event).
-The admin counts 1 for each clue the admin solved first. Approving a pending
-player submission credits the player, not the admin.
+A player counts 1 for each clue they solved first (the earliest positive score
+event for that clue). The admin counts 1 for each clue the admin solved first.
+Approving a pending player submission credits the player, not the admin.
 """
 
 from ..api.routes import rooms as rooms_module
@@ -16,12 +16,15 @@ def build_statistics(room_id: str) -> dict:
         for player in rooms_module.player_repository.list_by_room(room_id)
         if player.role == "player"
     ]
-    events = scoring_service._default_service._score_repository.list_by_room(room_id)
+    color_to_player = {player.color: player.playerId for player in players}
 
     first_counts: dict[str, int] = {}
-    for event in events:
-        if event.points == 2:
-            first_counts[event.playerId] = first_counts.get(event.playerId, 0) + 1
+    for (rid, _clue_id), state in scoring_service._default_service._public_clue_states.items():
+        if rid != room_id or not state.solved or not state.firstSolverColor:
+            continue
+        player_id = color_to_player.get(state.firstSolverColor)
+        if player_id is not None:
+            first_counts[player_id] = first_counts.get(player_id, 0) + 1
 
     player_entries = [
         {

@@ -128,7 +128,7 @@ def admin_client(repositories, monkeypatch):
         yield client, submission_repository, answer_repository
 
 
-def test_scenario_three_pending_in_chronological_order_scores_2_1_and_incorrect_0(repositories):
+def test_scenario_three_pending_in_chronological_order_scores_1_1_and_incorrect_0(repositories):
     submission_repository, _ = repositories
     player_a = make_submission("sub-a", "player-a", "banana", T1)
     player_b = make_submission("sub-b", "player-b", "apple", T2)
@@ -144,7 +144,7 @@ def test_scenario_three_pending_in_chronological_order_scores_2_1_and_incorrect_
     assert stored_a.status == SubmissionStatus.incorrect
     assert stored_a.pointsAwarded == 0
     assert stored_b.status == SubmissionStatus.correct
-    assert stored_b.pointsAwarded == 2
+    assert stored_b.pointsAwarded == 1
     assert stored_c.status == SubmissionStatus.correct
     assert stored_c.pointsAwarded == 1
 
@@ -168,7 +168,7 @@ def test_scenario_admin_put_hook_resolves_all_pending_submissions(admin_client):
     assert stored_a.status == SubmissionStatus.incorrect
     assert stored_a.pointsAwarded == 0
     assert stored_b.status == SubmissionStatus.correct
-    assert stored_b.pointsAwarded == 2
+    assert stored_b.pointsAwarded == 1
     assert stored_c.status == SubmissionStatus.correct
     assert stored_c.pointsAwarded == 1
 
@@ -200,7 +200,7 @@ def test_edge_millisecond_timestamp_differences_are_strictly_respected(repositor
 
     reconcile_pending_submissions(ROOM_ID, CLUE_ID, "APPLE")
 
-    assert submission_repository.get("sub-earlier").pointsAwarded == 2
+    assert submission_repository.get("sub-earlier").pointsAwarded == 1
     assert submission_repository.get("sub-later").pointsAwarded == 1
 
 
@@ -218,7 +218,7 @@ def test_edge_already_non_pending_submissions_are_ignored(repositories):
     unchanged = submission_repository.get("sub-correct")
     assert unchanged.status == SubmissionStatus.correct
     assert unchanged.pointsAwarded == 0
-    assert submission_repository.get("sub-pending").pointsAwarded == 2
+    assert submission_repository.get("sub-pending").pointsAwarded == 1
 
 
 def test_reconciliation_broadcasts_clue_solved_with_first_solver_color(
@@ -241,5 +241,5 @@ def test_reconciliation_broadcasts_clue_solved_with_first_solver_color(
 
     reconcile_pending_submissions(ROOM_ID, CLUE_ID, "APPLE")
 
-    assert broadcast == [(ROOM_ID, CLUE_ID, "#AABBCC", 2)]
+    assert broadcast == [(ROOM_ID, CLUE_ID, "#AABBCC", 1)]
 

@@ -170,14 +170,14 @@ def test_scenario_revealed_player_correct_submission_returns_zero(env):
     assert points == 0
 
 
-def test_scenario_unrevealed_player_first_solver_returns_two(env):
+def test_scenario_unrevealed_player_first_solver_returns_one(env):
     env.clue_state_repository.save(
         PlayerClueState(playerId=PLAYER_B, clueId=CLUE_ID, revealed=False), ROOM_ID
     )
 
     points = calculate_points(ROOM_ID, CLUE_ID, PLAYER_B, True, "player")
 
-    assert points == 2
+    assert points == 1
 
 
 def test_scenario_revealed_player_not_recorded_as_solver(api_env, client):
@@ -212,11 +212,11 @@ def test_scenario_player_a_reveal_does_not_block_player_b_first_solver(api_env, 
     )
 
     assert response.status_code == 200
-    assert response.json() == {"status": "correct", "points": 2}
+    assert response.json() == {"status": "correct", "points": 1}
     events = api_env.score_repository.list_by_room(ROOM_ID)
     assert len(events) == 1
     assert events[0].playerId == PLAYER_B
-    assert events[0].points == 2
+    assert events[0].points == 1
     public_state = scoring_service._default_service.get_public_clue_state(
         ROOM_ID, CLUE_ID
     )
@@ -245,10 +245,10 @@ def test_reconciliation_revealed_pending_submission_scores_zero(api_env):
     assert api_env.score_repository.list_by_room(ROOM_ID) == []
 
 
-def test_edge_missing_player_clue_state_returns_two(env):
+def test_edge_missing_player_clue_state_returns_one(env):
     points = calculate_points(ROOM_ID, CLUE_ID, PLAYER_B, True, "player")
 
-    assert points == 2
+    assert points == 1
 
 
 def test_edge_missing_player_clue_state_after_first_solver_returns_one(env):

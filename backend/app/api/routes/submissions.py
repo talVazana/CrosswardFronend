@@ -110,7 +110,8 @@ def submit_answer(roomId: str, clueId: str, body: SubmissionRequest, request: Re
             )
             firestore_publisher.publish_submission(submission)
             first_solver_color = (
-                player_color if points == 2 else scoring_service._default_service.get_public_clue_state(roomId, clueId).firstSolverColor or ""
+                scoring_service._default_service.get_public_clue_state(roomId, clueId).firstSolverColor
+                or ""
             )
             events_module.broadcast_clue_solved(roomId, clueId, first_solver_color, points)
             firestore_publisher.publish_room(roomId)

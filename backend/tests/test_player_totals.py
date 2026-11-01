@@ -99,19 +99,19 @@ def solve(client, room_id: str, name: str = "Dana") -> dict:
 def test_correct_answer_creates_a_lifetime_total(client):
     solved = solve(client, ROOM_ID)
 
-    assert solved["points"] == 2
+    assert solved["points"] == 1
     response = client.get("/players/Dana/total")
     assert response.status_code == 200
-    assert response.json() == {"displayName": "Dana", "totalScore": 2}
+    assert response.json() == {"displayName": "Dana", "totalScore": 1}
 
 
 def test_lifetime_total_sums_points_from_two_rooms(client):
     first = solve(client, ROOM_ID)
     second = solve(client, ROOM_ID_2)
 
-    assert first["points"] == 2
-    assert second["points"] == 2
-    assert player_totals.get_total("Dana") == 4
+    assert first["points"] == 1
+    assert second["points"] == 1
+    assert player_totals.get_total("Dana") == 2
 
 
 def test_repeated_solve_in_one_room_adds_no_points(client):
@@ -122,7 +122,7 @@ def test_repeated_solve_in_one_room_adds_no_points(client):
 
     assert again.status_code == 200
     assert again.json()["points"] == 0
-    assert player_totals.get_total("Dana") == 2
+    assert player_totals.get_total("Dana") == 1
 
 
 def test_totals_are_kept_after_the_room_is_deleted(client):
@@ -132,7 +132,7 @@ def test_totals_are_kept_after_the_room_is_deleted(client):
     rooms_module.room_repository.create(make_room(ROOM_ID_2))
 
     assert client.get(f"/rooms/{ROOM_ID}/state").status_code == 404
-    assert player_totals.get_total("Dana") == 2
+    assert player_totals.get_total("Dana") == 1
 
 
 def test_leaderboard_sorts_by_total_score(client):
@@ -144,10 +144,10 @@ def test_leaderboard_sorts_by_total_score(client):
     assert response.status_code == 200
     players = response.json()["players"]
     assert players[0]["displayName"] == "Amit"
-    assert players[0]["totalScore"] == 2
+    assert players[0]["totalScore"] == 1
     assert players[0]["color"] == "#0D9488"
     assert players[1]["displayName"] == "Dana"
-    assert players[1]["totalScore"] == 2
+    assert players[1]["totalScore"] == 1
     assert players[1]["color"] == "#DC2626"
 
 

@@ -68,12 +68,12 @@ def test_public_functions_are_importable():
     assert callable(apply_score)
 
 
-def test_given_empty_score_history_when_player_submits_correctly_then_returns_2(service_factory):
+def test_given_empty_score_history_when_player_submits_correctly_then_returns_1(service_factory):
     service_factory([])
 
     points = calculate_points(ROOM_ID, CLUE_ID, PLAYER_A, True, "player")
 
-    assert points == 2
+    assert points == 1
 
 
 def test_given_player_a_already_scored_when_player_b_submits_correctly_then_returns_1(service_factory):
@@ -100,12 +100,12 @@ def test_given_player_a_already_scored_when_admin_submits_correctly_then_returns
     assert points == 0
 
 
-def test_given_previous_scoring_on_other_clue_when_player_submits_then_returns_2(service_factory):
-    service_factory([make_event(PLAYER_A, 2, clue_id=OTHER_CLUE_ID)])
+def test_given_previous_scoring_on_other_clue_when_player_submits_then_returns_1(service_factory):
+    service_factory([make_event(PLAYER_A, 1, clue_id=OTHER_CLUE_ID)])
 
     points = calculate_points(ROOM_ID, CLUE_ID, PLAYER_B, True, "player")
 
-    assert points == 2
+    assert points == 1
 
 
 def test_given_first_apply_score_with_points_2_and_red_then_state_solved_and_red(service_factory):

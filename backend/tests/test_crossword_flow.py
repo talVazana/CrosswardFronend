@@ -187,14 +187,14 @@ def test_admin_grid_state_has_puzzle_answers_and_solved_colors_but_no_admin_play
     assert {player["id"] for player in state["players"]} == {PLAYER_A, PLAYER_B}
 
 
-def test_admin_preapproval_makes_first_player_two_points_and_later_player_one(env):
+def test_admin_preapproval_first_and_later_player_each_get_one_point(env):
     client = env["client"]
     approve(client)
 
     first = submit(client, TOKEN_A, "apple")
     second = submit(client, TOKEN_B, "APPLE")
 
-    assert first.json() == {"status": "correct", "points": 2}
+    assert first.json() == {"status": "correct", "points": 1}
     assert second.json() == {"status": "correct", "points": 1}
 
     state = public_state(client)
@@ -327,7 +327,7 @@ def test_revealed_player_earns_zero_and_later_solver_becomes_first_solver(env):
     assert public_state(client)["solvedClues"] == []
 
     later = submit(client, TOKEN_B)
-    assert later.json() == {"status": "correct", "points": 2}
+    assert later.json() == {"status": "correct", "points": 1}
     assert public_state(client)["solvedClues"] == [
         {"clueId": CLUE_ID, "firstSolverColor": ASSIGNED_PLAYER_COLORS[1]}
     ]
@@ -402,7 +402,7 @@ def test_hebrew_final_letter_submission_matches_regular_official(env):
     approve(client, "שולחן")
 
     response = submit(client, TOKEN_A, "שולחנ")
-    assert response.json() == {"status": "correct", "points": 2}
+    assert response.json() == {"status": "correct", "points": 1}
 
 
 def test_reconcile_pending_regular_matches_final_official(env):

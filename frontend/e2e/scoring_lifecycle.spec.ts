@@ -90,7 +90,7 @@ async function loginAsAdmin(context: BrowserContext): Promise<Page> {
 }
 
 test.describe("E2E-005 Gameplay Loop (scoring)", () => {
-  test("Dana scores 2 points first, Amir scores 1 point second in the DOM scoreboard, clue keeps Dana's color", async ({ browser }) => {
+  test("Dana and Amir each score 1 point in the DOM scoreboard, clue keeps Dana's color", async ({ browser }) => {
     const danaContext = await browser.newContext();
     const amirContext = await browser.newContext();
     try {
@@ -107,7 +107,7 @@ test.describe("E2E-005 Gameplay Loop (scoring)", () => {
 
       await dana.reload();
       await expect(dana.getByRole("heading", { name: "E2E Room" })).toBeVisible();
-      await expectScore(dana, DANA.name, 2);
+      await expectScore(dana, DANA.name, 1);
 
       const [r, c] = ACROSS_CLUE.startCell;
       await expect(dana.getByTestId(`cell-${r}-${c}`)).toHaveCSS(
@@ -122,7 +122,7 @@ test.describe("E2E-005 Gameplay Loop (scoring)", () => {
       await amir.reload();
       await expect(amir.getByRole("heading", { name: "E2E Room" })).toBeVisible();
       await expectScore(amir, AMIR.name, 1);
-      await expectScore(amir, DANA.name, 2);
+      await expectScore(amir, DANA.name, 1);
 
       await expect(amir.getByTestId(`cell-${r}-${c}`)).toHaveCSS(
         "box-shadow",

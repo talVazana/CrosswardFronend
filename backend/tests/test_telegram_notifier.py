@@ -5,7 +5,7 @@ import pytest
 from app.api.routes import admin as admin_module
 from app.api.routes import rooms as rooms_module
 from app.models.admin_solve import AdminSolve
-from app.models.gameplay import ScoreEvent, utc_now
+from app.models.gameplay import PublicClueState, ScoreEvent, utc_now
 from app.models.puzzle import Cell, Clue, Puzzle
 from app.models.room import Player, Room, RoomStatus
 from app.repositories.in_memory import InMemoryRoomRepository
@@ -52,12 +52,12 @@ def make_room(status: RoomStatus = RoomStatus.lobby) -> Room:
     )
 
 
-def add_player(name: str, player_id: str) -> Player:
+def add_player(name: str, player_id: str, color: str = "#DC2626") -> Player:
     player = Player(
         roomId=ROOM_ID,
         playerId=player_id,
         displayName=name,
-        color="#DC2626",
+        color=color,
         role="player",
     )
     rooms_module.player_repository.add(player)
@@ -75,6 +75,12 @@ def add_score(player_id: str, points: int, clue_id: str) -> None:
             reason="correct_submission",
             timestamp=utc_now(),
         )
+    )
+
+
+def add_first_solve(clue_id: str, color: str) -> None:
+    scoring_service._default_service._public_clue_states[(ROOM_ID, clue_id)] = (
+        PublicClueState(clueId=clue_id, solved=True, firstSolverColor=color)
     )
 
 
@@ -100,11 +106,13 @@ def test_started_message_has_title_room_and_player_count(room_state):
 
 
 def test_finished_message_has_winner_and_score_guide(room_state):
-    add_player("Dana", "player-1")
-    add_player("Amit", "player-2")
-    add_score("player-1", 2, "clue1")
+    add_player("Dana", "player-1", "#DC2626")
+    add_player("Amit", "player-2", "#0D9488")
+    add_score("player-1", 1, "clue1")
     add_score("player-1", 1, "clue2")
-    add_score("player-2", 2, "clue3")
+    add_score("player-2", 1, "clue3")
+    add_first_solve("clue1", "#DC2626")
+    add_first_solve("clue3", "#0D9488")
     admin_solves.repository.add(
         AdminSolve(
             roomId=ROOM_ID,
@@ -117,7 +125,7 @@ def test_finished_message_has_winner_and_score_guide(room_state):
     message = telegram_notifier.format_finished_message(room_state)
 
     assert "Game finished: Friday night crossword" in message
-    assert "Winner: Dana (3 pts)" in message
+    assert "Winner: Dana (2 pts)" in message
     assert "Admin vs players (clues): 1 - 2" in message
 
 

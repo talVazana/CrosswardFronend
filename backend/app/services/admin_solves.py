@@ -13,8 +13,8 @@ def record_first_solve(room_id: str, clue_id: str, admin_id: str) -> bool:
     """
     from ..services import firestore_publisher, scoring_service
 
-    events = scoring_service._default_service._score_repository.list_by_room(room_id)
-    if any(event.clueId == clue_id and event.points == 2 for event in events):
+    state = scoring_service._default_service.get_public_clue_state(room_id, clue_id)
+    if state.solved and state.firstSolverColor:
         return False
 
     solve = AdminSolve(roomId=room_id, clueId=clue_id, adminId=admin_id)
