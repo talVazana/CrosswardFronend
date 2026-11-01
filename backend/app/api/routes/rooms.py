@@ -1,4 +1,5 @@
 import hashlib
+import os
 import secrets
 import threading
 from collections import Counter
@@ -161,8 +162,11 @@ def join_room(roomId: str, body: JoinRequest, response: Response, request: Reque
     if room_repository.get(roomId) is None:
         raise HTTPException(status_code=404, detail="Room not found")
 
-    desired_name = body.displayName.strip()
-    if request.headers.get("Authorization"):
+    if os.environ.get("AUTH_BYPASS") == "1":
+        # Local/test only: derive identity from the display name. Never set in
+        # production, where a verified Google token is required.
+        desired_name = body.displayName.strip()
+    else:
         email = auth.require_google_user(request)
         nickname = profiles.get_nickname(email)
         if not nickname:

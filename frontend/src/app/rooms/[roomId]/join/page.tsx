@@ -11,7 +11,6 @@ export default function JoinPage() {
   const params = useParams<{ roomId: string }>();
   const roomId = params.roomId;
 
-  const [displayName, setDisplayName] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
 
@@ -77,47 +76,6 @@ export default function JoinPage() {
     }
   };
 
-  const handleAnonymousJoin = async (e: FormEvent<HTMLFormElement>) => {
-    e.preventDefault();
-    setError(null);
-    if (displayName.trim().length === 0) {
-      setError("Display name is required");
-      return;
-    }
-    setSubmitting(true);
-    try {
-      const res = await roomFetch(roomId, `/rooms/${roomId}/join`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ displayName }),
-      });
-      if (res.ok) {
-        const body = (await res.json().catch(() => ({}))) as {
-          sessionToken?: unknown;
-        };
-        if (typeof body.sessionToken === "string") {
-          setRoomSessionToken(roomId, body.sessionToken);
-        }
-        router.push(`/rooms/${roomId}`);
-        return;
-      }
-      let message = `Request failed with status ${res.status}`;
-      try {
-        const body = await res.json();
-        if (body && typeof body.detail === "string") {
-          message = body.detail;
-        }
-      } catch {
-        // keep default message
-      }
-      setError(message);
-    } catch {
-      setError("Network error. Please try again.");
-    } finally {
-      setSubmitting(false);
-    }
-  };
-
   const saveNickname = async (e: FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     setError(null);
@@ -151,7 +109,6 @@ export default function JoinPage() {
             >
               Sign in with Google
             </button>
-            <p className="muted text-center text-xs">or join without an account</p>
           </>
         ) : nickname === null ? (
           <form onSubmit={saveNickname} className="flex flex-col gap-3">
@@ -180,28 +137,6 @@ export default function JoinPage() {
             {submitting ? "Joining..." : `Join as ${nickname}`}
           </button>
         )}
-
-        {!signedIn ? (
-          <form onSubmit={handleAnonymousJoin} className="flex flex-col gap-4">
-            <label className="flex flex-col gap-1 text-start">
-              <span className="text-sm font-medium">Display Name</span>
-              <input
-                type="text"
-                name="displayName"
-                value={displayName}
-                onChange={(e) => setDisplayName(e.target.value)}
-                className="input"
-                placeholder="Your name"
-              />
-            </label>
-            <p className="muted text-sm">
-              Your crossword color is assigned automatically when you join.
-            </p>
-            <button type="submit" disabled={submitting} className="btn-primary w-full">
-              {submitting ? "Joining..." : "Join"}
-            </button>
-          </form>
-        ) : null}
 
         {error ? (
           <p role="alert" className="text-sm font-medium text-blue-700">

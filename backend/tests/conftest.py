@@ -1,6 +1,7 @@
 import os
 
 os.environ.setdefault("FIREBASE_AUTH_EMULATOR_HOST", "127.0.0.1:9099")
+os.environ.setdefault("AUTH_BYPASS", "1")
 
 import jwt
 import pytest

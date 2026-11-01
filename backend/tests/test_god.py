@@ -164,3 +164,35 @@ def test_god_lists_all_signed_in_users(client, god_headers):
     assert users["player1@example.com"]["nickname"] == "Dana"
     assert users["player1@example.com"]["role"] is None
     assert users["player2@example.com"]["nickname"] is None
+
+def test_join_requires_google_auth_in_production(monkeypatch):
+    from app.api.routes import rooms as rooms_module
+    from app.models.puzzle import Cell, Clue, Puzzle
+    from app.models.room import Room, RoomStatus
+    from app.repositories.in_memory import InMemoryPlayerRepository, InMemoryRoomRepository
+
+    monkeypatch.delenv("AUTH_BYPASS", raising=False)
+    room_repo = InMemoryRoomRepository()
+    room_repo.create(
+        Room(
+            roomId="auth-room",
+            title="T",
+            status=RoomStatus.lobby,
+            puzzleSnapshot=Puzzle(
+                puzzleId="p",
+                title="t",
+                width=1,
+                height=1,
+                cells=[Cell(row=0, col=0, type="white", number=1, startsAcross=True, startsDown=False)],
+                clues=[Clue(clueId="c", number=1, direction="across", text="t", answerLength=1)],
+            ),
+            creatorId="c",
+        )
+    )
+    monkeypatch.setattr(rooms_module, "room_repository", room_repo)
+    monkeypatch.setattr(rooms_module, "player_repository", InMemoryPlayerRepository())
+
+    with TestClient(app, base_url="https://testserver") as client:
+        response = client.post("/rooms/auth-room/join", json={"displayName": "Dana"})
+
+    assert response.status_code == 401
